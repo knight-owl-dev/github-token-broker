@@ -26,37 +26,29 @@ public sealed class HttpBrokerClient : IBrokerClient, IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly BrokerEndpoint _endpoint;
-    private readonly string? _clientCredential;
 
     /// <summary>Creates the client over a caller-supplied transport.</summary>
     /// <param name="httpClient">Client bound to <paramref name="endpoint"/>.</param>
     /// <param name="endpoint">The endpoint, named when the broker cannot be reached.</param>
-    /// <param name="clientCredential">
-    /// Credential for the TCP transport, or <see langword="null"/> on a Unix socket.
-    /// </param>
     /// <remarks>
     /// Nothing outside this assembly can hand the two arguments a transport that
     /// disagrees with the endpoint it reports; <see cref="Create"/> derives one
     /// from the other.
     /// </remarks>
-    internal HttpBrokerClient(HttpClient httpClient, BrokerEndpoint endpoint, string? clientCredential)
+    internal HttpBrokerClient(HttpClient httpClient, BrokerEndpoint endpoint)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(endpoint);
 
         _httpClient = httpClient;
         _endpoint = endpoint;
-        _clientCredential = clientCredential;
     }
 
     /// <summary>Creates a client and the transport it talks over.</summary>
     /// <param name="endpoint">The broker endpoint to reach.</param>
-    /// <param name="clientCredential">
-    /// Credential for the TCP transport, or <see langword="null"/> on a Unix socket.
-    /// </param>
     /// <returns>A client the caller owns and must dispose.</returns>
-    public static HttpBrokerClient Create(BrokerEndpoint endpoint, string? clientCredential)
-        => new(BrokerHttpClientFactory.Create(endpoint), endpoint, clientCredential);
+    public static HttpBrokerClient Create(BrokerEndpoint endpoint)
+        => new(BrokerHttpClientFactory.Create(endpoint), endpoint);
 
     /// <inheritdoc/>
     public Task<BrokerTokenResponse> RequestTokenAsync(
@@ -110,11 +102,6 @@ public sealed class HttpBrokerClient : IBrokerClient, IDisposable
             MediaTypeNames.Application.Json
         );
 
-        if (_clientCredential is not null)
-        {
-            request.Headers.Add(BrokerProtocol.ClientCredentialHeader, _clientCredential);
-        }
-
         HttpResponseMessage response;
         try
         {
@@ -146,10 +133,6 @@ public sealed class HttpBrokerClient : IBrokerClient, IDisposable
                 HttpStatusCode.Forbidden => new BrokerClientException(
                     BrokerClientFailure.Refused,
                     $"The broker does not serve {repository.FullName}."
-                ),
-                HttpStatusCode.Unauthorized => new BrokerClientException(
-                    BrokerClientFailure.Unauthenticated,
-                    "The broker rejected the client credential."
                 ),
                 HttpStatusCode.Conflict => new BrokerClientException(
                     BrokerClientFailure.Misconfigured,

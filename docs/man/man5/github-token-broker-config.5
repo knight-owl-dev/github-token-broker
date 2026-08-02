@@ -166,25 +166,23 @@ repository.
 .Ic listen
 must configure
 .Ic unix_socket ,
-.Ic tcp ,
-or both.
-A section configuring neither is refused, as is
-.Ic unix_socket_mode
-with no socket to apply it to.
-.\"
-.Ss Unix socket
-The recommended shape, and the one to reach for unless a caller cannot see the
-host filesystem.
+which is one object per transport rather than a flat set of keys, so a second
+transport arrives beside it.
+.Pp
 Authorization is filesystem access, so there is no shared secret to distribute,
-rotate, or leak.
+rotate, or leak, and nothing bound that another host could reach.
+A caller in a container reaches the socket by bind-mounting it; see
+.Xr github-token 1 .
 .Bd -literal -offset indent
 {
   "app_id": 123456,
   "installation_id": 789012,
   "private_key_path": "/etc/github-token-broker/app.pem",
   "listen": {
-    "unix_socket": "/run/github-token-broker/broker.sock",
-    "unix_socket_mode": "0600"
+    "unix_socket": {
+      "path": "/run/github-token-broker/broker.sock",
+      "mode": "0600"
+    }
   },
   "repositories": {
     "example-owner/example-repo": {
@@ -197,13 +195,13 @@ rotate, or leak.
 }
 .Ed
 .Bl -tag -width Ds
-.It Ic unix_socket
-Required for this shape.
+.It Ic unix_socket.path
+Required.
 Absolute path to bind.
 Must fit the platform's
 .Vt sockaddr_un
 limit, which is 104 bytes on macOS and 108 on Linux.
-.It Ic unix_socket_mode
+.It Ic unix_socket.mode
 Defaults to
 .Ql 0600 .
 Three octal digits, optionally with a leading zero, written as a JSON string.
@@ -219,120 +217,20 @@ Sharing with a group is
 plus group ownership from the service unit.
 The socket's directory is the outer half of the same control; see
 .Xr github-token-broker 8 .
-.\"
-.Ss TCP
-For a caller that cannot see the host filesystem, such as a container reaching
-its host.
-Filesystem permissions mean nothing across that boundary, so a shared secret
-takes their place.
-.Bd -literal -offset indent
-{
-  "listen": {
-    "tcp": {
-      "address": "127.0.0.1",
-      "port": 8765,
-      "client_credential_path":
-        "/etc/github-token-broker/client-credential"
-    }
-  }
-}
-.Ed
-.Bl -tag -width Ds
-.It Ic address
-Required.
-The IP address to bind.
-Loopback, or a private range:
-.Ql 10.0.0.0/8 ,
-.Ql 172.16.0.0/12 ,
-.Ql 192.168.0.0/16 ,
-.Ql 169.254.0.0/16 ,
-and the IPv6 link-local and unique-local equivalents.
-.It Ic port
-Required.
-The port to bind, 1 to 65535.
-.It Ic client_credential_path
-Required.
-Absolute path to a file holding the client credential.
-.El
-.Pp
-There is no TLS, so the credential crosses the connection in cleartext and this
-transport reaches no further than the host and its private network.
-Startup refuses a public address.
-It also refuses
-.Ql 0.0.0.0
-and
-.Ql :: :
-a wildcard covers every interface the host has, including ones it may grow
-later, so name the interface instead.
-.Pp
-Which address a container can reach depends on its runtime; see
-.Xr github-token 1 .
-.\"
-.Ss Both at once
-One broker can serve local processes over the socket and a container over TCP
-at the same time.
-The credential requirement follows the connection rather than the broker: a
-request arriving on TCP must present it, and a request arriving on the socket
-must not be asked for one.
-.Bd -literal -offset indent
-{
-  "listen": {
-    "unix_socket": "/run/github-token-broker/broker.sock",
-    "unix_socket_mode": "0600",
-    "tcp": {
-      "address": "127.0.0.1",
-      "port": 8765,
-      "client_credential_path":
-        "/etc/github-token-broker/client-credential"
-    }
-  }
-}
-.Ed
 .\" -------------------------------------------------------------------------
 .Sh FILES
-Both are named by path rather than by value, so this document carries no secret
-and can be read by anyone who needs to understand the deployment.
 .Bl -tag -width Ds
 .It The App private key
-Named by
-.Ic private_key_path .
 A PEM RSA private key, readable only by the account the broker runs as.
+.Ic private_key_path
+names it by path rather than value, so this document carries no secret and can
+be read by anyone who needs to understand the deployment.
+.Pp
 It is read at startup, so an unreadable one fails the broker with its own exit
 status rather than surfacing at the first mint.
 Where it may live, and why not in a container, is in
 .Xr github-token-broker 8 .
-.It The client credential
-Named by
-.Ic listen.tcp.client_credential_path .
-A high-entropy shared secret of at least 32 characters, compared in constant
-time and never logged.
-Leading and trailing whitespace is stripped, here and in the client's copy.
-The newline every editor and
-.Xr openssl 1
-pipeline leaves behind therefore needs no trimming by hand.
-.Bd -literal -offset indent
-cd /etc/github-token-broker
-openssl rand -hex 32 > client-credential
-chmod 0600 client-credential
-.Ed
-.Pp
-It authorizes reaching this broker and nothing more.
-It is not a GitHub credential and not the App private key.
-.Pp
-It belongs to the endpoint rather than to a caller.
-One value serves every TCP client, the broker never learns which one is asking,
-and presenting it confers the whole allowlist.
-There is no way to withdraw it from one caller alone.
-.Pp
-Unlike the private key it is read once at startup.
-Rotating it means replacing the file, restarting the broker, and updating every
-client together.
 .El
-.Pp
-The client reads the same value from
-.Ev GITHUB_TOKEN_BROKER_CREDENTIAL_FILE ;
-see
-.Xr github-token 1 .
 .\" -------------------------------------------------------------------------
 .Sh DIAGNOSTICS
 A document that fails validation is reported on standard error and the broker

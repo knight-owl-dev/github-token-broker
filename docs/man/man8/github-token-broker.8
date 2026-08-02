@@ -55,8 +55,8 @@ It holds the App private key, and a container's image and memory are readable
 by anyone who can run the runtime, which puts the key within reach of every
 workload on that daemon.
 .Pp
-Clients in containers reach the host over TCP; see
-.Xr github-token-broker-config 5 .
+Clients in containers reach it by bind-mounting the socket; see
+.Xr github-token 1 .
 .Pp
 Run it as a dedicated account that does nothing else.
 That account owns the private key, mode
@@ -140,13 +140,9 @@ Every refusal is one status and one message, so error text cannot be used to
 probe the allowlist.
 The precise reason goes to the log instead.
 .Pp
-On the TCP transport every route requires the client credential in the
-.Ql X-GitHub-Token-Broker-Credential
-header, including
-.Ic /health .
-A uniform rule has no carve-out to get wrong, and a client that can reach the
-endpoint already holds the credential.
-Requests arriving on the Unix socket are not asked for one.
+No route asks for a credential.
+Reaching the socket is the authorization, and a caller that can write to it
+could mint for the whole allowlist by any route.
 .\" -------------------------------------------------------------------------
 .Sh TRANSPORTS
 Which transport to configure, and what each costs, is in
@@ -281,13 +277,6 @@ $ curl --unix-socket /run/github-token-broker/broker.sock \e
     http://localhost/health
 {"status":"ok","repositories":2}
 .Ed
-.Pp
-Over TCP the credential is required, including here:
-.Bd -literal -offset indent
-$ CRED=$(cat /etc/github-token-broker/client-credential)
-$ curl -H "X-GitHub-Token-Broker-Credential: $CRED" \e
-    http://127.0.0.1:8765/health
-.Ed
 .\" -------------------------------------------------------------------------
 .Sh DIAGNOSTICS
 Mint failures are classified, because the class decides what happens next and
@@ -369,8 +358,7 @@ or
 .Ic Unavailable .
 .It Sy 77
 Refused before any mint was attempted, so no class was reached.
-The repository is absent from the allowlist, or the client credential was
-rejected.
+The repository is absent from the allowlist.
 .It Sy 78
 .Sy 409 :
 .Ic InstallationForbidden

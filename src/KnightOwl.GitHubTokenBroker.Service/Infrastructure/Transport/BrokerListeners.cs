@@ -12,47 +12,23 @@ internal static class BrokerListeners
     /// <param name="webHost">The host to add the listeners to.</param>
     extension(IWebHostBuilder webHost)
     {
-        /// <summary>Binds every configured listener.</summary>
-        /// <param name="listen">The configured listeners.</param>
+        /// <summary>Binds the configured listener.</summary>
+        /// <param name="listen">The configured listener.</param>
         /// <exception cref="ConfigurationException">
-        /// A Unix socket path is not free to bind. Kestrel raises the rest when the
-        /// application is built.
+        /// The socket path is not free to bind.
         /// </exception>
         public void UseBrokerListeners(ListenOptions listen)
         {
             ArgumentNullException.ThrowIfNull(webHost);
             ArgumentNullException.ThrowIfNull(listen);
 
-            if (listen.UnixSocket is { } unixSocket)
-            {
-                UnixSocketPreparation.Prepare(unixSocket.Path);
-            }
+            UnixSocketPreparation.Prepare(listen.UnixSocket.Path);
 
             webHost.ConfigureKestrel(options =>
                 {
                     options.Limits.MaxRequestBodySize = BrokerProtocol.MaxRequestBytes;
                     options.AddServerHeader = false;
-
-                    if (listen.UnixSocket is { } socket)
-                    {
-                        options.ListenUnixSocket(socket.Path);
-                    }
-
-                    if (listen.Tcp is { } tcp)
-                    {
-                        options.Listen(
-                            tcp.Address,
-                            tcp.Port,
-                            listener => listener.Use(next => async connection =>
-                                {
-                                    // Marks the connection so the credential gate can require a secret
-                                    // here without imposing one on the Unix socket.
-                                    connection.Features.Set(new TcpTransportMarker());
-                                    await next(connection);
-                                }
-                            )
-                        );
-                    }
+                    options.ListenUnixSocket(listen.UnixSocket.Path);
                 }
             );
         }

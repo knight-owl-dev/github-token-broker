@@ -168,7 +168,6 @@ public sealed class CredentialHelperTests
     }
 
     [Theory]
-    [InlineData(BrokerClientFailure.Unauthenticated, CliExitCode.NotAuthorized)]
     [InlineData(BrokerClientFailure.Misconfigured, CliExitCode.Configuration)]
     [InlineData(BrokerClientFailure.Failed, CliExitCode.Internal)]
     public async Task FailsLoudlyForOtherBrokerFailures(

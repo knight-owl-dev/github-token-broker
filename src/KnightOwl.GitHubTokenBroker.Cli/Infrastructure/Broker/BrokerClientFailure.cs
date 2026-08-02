@@ -16,20 +16,15 @@ public enum BrokerClientFailure
     Refused = 2,
 
     /// <summary>
-    /// The client credential was missing or rejected on the TCP transport.
-    /// </summary>
-    Unauthenticated = 3,
-
-    /// <summary>
     /// The broker answered, but could not supply a token. Its own log holds the
     /// reason.
     /// </summary>
-    Failed = 4,
+    Failed = 3,
 
     /// <summary>
     /// The repository is allowlisted but the App installation does not grant it.
     /// Distinct from <see cref="Unavailable"/> because retrying cannot help, and
     /// from <see cref="Refused"/> because an operator has something to fix.
     /// </summary>
-    Misconfigured = 5,
+    Misconfigured = 4,
 }

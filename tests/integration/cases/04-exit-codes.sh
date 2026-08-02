@@ -72,7 +72,8 @@ assert_eq "gh without the -- separator is a usage error" 64 "${RUN_STATUS}"
 run_capture env \
   "GITHUB_TOKEN_BROKER_ENDPOINT=http://127.0.0.1:1" \
   github-token check "${SERVED_REPOSITORY}"
-assert_eq "an HTTP endpoint with no credential is a usage error" 64 "${RUN_STATUS}"
+assert_eq "an http endpoint is a usage error" 64 "${RUN_STATUS}"
+assert_contains "and says what is served instead" "${RUN_STDERR}" "Unix socket"
 
 # --- 69, the broker could not be reached --------------------------------------
 
@@ -102,48 +103,10 @@ if broker_wait_socket; then
   cli check "${UNLISTED_REPOSITORY}"
   assert_eq "a repository the broker will not serve is not authorized" 77 "${RUN_STATUS}"
   assert_contains "and names the repository" "${RUN_STDERR}" "${UNLISTED_REPOSITORY}"
-  assert_not_contains "rather than the credential it shares a status with" \
-    "${RUN_STDERR}" "client credential"
   assert_empty "and no permissions are disclosed" "${RUN_STDOUT}"
 else
   BROKER_OUTPUT="$(broker_log)"
   fail "the broker starts" "${BROKER_OUTPUT}"
-fi
-
-broker_stop
-
-# --- 77 over TCP, a credential the broker rejects -----------------------------
-#
-# Shares its status with the refused repository above, so the message is
-# asserted to carry which one it was.
-
-TCP_CONFIG="${WORK}/tcp-config.json"
-TCP_LOG="${WORK}/tcp-broker.log"
-TCP_PORT="$(fixture_free_port)"
-fixture_credential "${WORK}/credential"
-fixture_config "${TCP_CONFIG}" "${WORK}/app.pem" \
-  --tcp 127.0.0.1 "${TCP_PORT}" "${WORK}/credential"
-
-broker_start "${TCP_CONFIG}" "${TCP_LOG}"
-
-if broker_wait_log 'Now listening on'; then
-  run_capture env \
-    "GITHUB_TOKEN_BROKER_ENDPOINT=http://127.0.0.1:${TCP_PORT}" \
-    "GITHUB_TOKEN_BROKER_CREDENTIAL_FILE=${WORK}/credential" \
-    github-token check "${SERVED_REPOSITORY}"
-  assert_eq "the right credential succeeds over TCP" 0 "${RUN_STATUS}"
-
-  run_capture env \
-    "GITHUB_TOKEN_BROKER_ENDPOINT=http://127.0.0.1:${TCP_PORT}" \
-    "GITHUB_TOKEN_BROKER_CREDENTIAL=wrong-credential-long-enough-to-send" \
-    github-token check "${SERVED_REPOSITORY}"
-  assert_eq "a rejected credential is not authorized" 77 "${RUN_STATUS}"
-  assert_contains "and names the credential rather than the repository" \
-    "${RUN_STDERR}" "client credential"
-  assert_empty "and no permissions are disclosed" "${RUN_STDOUT}"
-else
-  BROKER_OUTPUT="$(broker_log)"
-  fail "the broker listens on TCP" "${BROKER_OUTPUT}"
 fi
 
 broker_stop
@@ -215,19 +178,13 @@ reject workflows "the workflows permission is refused" << JSON
 }
 JSON
 
-reject public-listener "a listen address beyond this host's network is refused" << JSON
+reject pathless-socket "a socket with a mode and no path is refused" << JSON
 {
   "github_host": "github.com",
   "app_id": 1,
   "installation_id": 2,
   "private_key_path": "${WORK}/app.pem",
-  "listen": {
-    "tcp": {
-      "address": "0.0.0.0",
-      "port": 8765,
-      "client_credential_path": "${WORK}/credential"
-    }
-  },
+  "listen": { "unix_socket": { "mode": "0660" } },
   "repositories": { "${SERVED_REPOSITORY}": { "permissions": { "contents": "read" } } }
 }
 JSON
@@ -281,24 +238,23 @@ broker_stop
 
 # --- 78, a listener that cannot bind ------------------------------------------
 #
-# The TCP counterpart of an occupied socket path. Kestrel binds when the host
-# starts rather than when it is built, so this used to abort with a stack trace.
+# The occupied path is refused rather than cleared: an orphan from an unclean
+# shutdown reads the same as a mistyped path naming something real.
 
 BUSY_CONFIG="${WORK}/busy-config.json"
-BUSY_PORT="$(fixture_free_port)"
-fixture_config "${BUSY_CONFIG}" "${WORK}/app.pem" \
-  --tcp 127.0.0.1 "${BUSY_PORT}" "${WORK}/credential"
+BUSY_SOCKET="${WORK}/run/busy.sock"
+fixture_config "${BUSY_CONFIG}" "${WORK}/app.pem" --socket "${BUSY_SOCKET}"
 
 broker_start "${BUSY_CONFIG}" "${WORK}/busy-broker.log"
 
-if broker_wait_log 'Now listening on'; then
+if broker_wait_socket; then
   broker --config "${BUSY_CONFIG}"
-  assert_eq "a port already in use is a configuration error" 78 "${RUN_STATUS}"
+  assert_eq "a socket already bound is a configuration error" 78 "${RUN_STATUS}"
   assert_contains "and reports rather than aborting" "${RUN_STDERR}" "configuration error"
-  assert_contains "naming the address it could not have" "${RUN_STDERR}" "${BUSY_PORT}"
+  assert_contains "naming the path it could not have" "${RUN_STDERR}" "${BUSY_SOCKET}"
 else
   BROKER_OUTPUT="$(broker_log)"
-  fail "the first broker binds the port" "${BROKER_OUTPUT}"
+  fail "the first broker binds the socket" "${BROKER_OUTPUT}"
 fi
 
 broker_stop

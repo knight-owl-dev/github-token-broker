@@ -21,45 +21,9 @@ namespace KnightOwl.GitHubTokenBroker.Service.Api;
 /// </remarks>
 internal static class BrokerApi
 {
-    /// <param name="app">The application to add the gate to.</param>
+    /// <param name="app">The application to add the routes to.</param>
     extension(WebApplication app)
     {
-        /// <summary>Rejects TCP requests that do not present the client credential.</summary>
-        /// <remarks>
-        /// Applied to every route rather than only the minting ones: a uniform rule has
-        /// no carve-out to get wrong, and a client that can reach the endpoint already
-        /// holds the credential.
-        /// </remarks>
-        public void UseClientCredentialGate()
-        {
-            ArgumentNullException.ThrowIfNull(app);
-
-            app.Use(static async (context, next) =>
-                {
-                    if (context.Features.Get<TcpTransportMarker>() is null)
-                    {
-                        await next(context);
-                        return;
-                    }
-
-                    var credential = context.RequestServices.GetService<ClientCredential>();
-
-                    var presented = context.Request
-                        .Headers[BrokerProtocol.ClientCredentialHeader]
-                        .ToString();
-
-                    if (credential is null || !credential.Matches(presented))
-                    {
-                        BrokerApiLog.CredentialRejected(Logger(context));
-                        await WriteErrorAsync(context, HttpStatusCode.Unauthorized, "unauthorized");
-                        return;
-                    }
-
-                    await next(context);
-                }
-            );
-        }
-
         /// <summary>Maps the health, token, and check routes.</summary>
         public void MapBrokerApi()
         {

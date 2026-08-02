@@ -21,12 +21,11 @@ using Microsoft.Extensions.Logging;
 namespace KnightOwl.GitHubTokenBroker.Service.Tests;
 
 /// <summary>
-/// Drives the real client against the real server over both transports, so the
-/// endpoint form is proven not to change any behavior above it.
+/// Drives the real client against the real server over the socket, so the
+/// transport is proven rather than stubbed.
 /// </summary>
 public sealed class BrokerTransportTests : IAsyncLifetime
 {
-    private const string Credential = "0123456789abcdef0123456789abcdef";
     private const string Token = "ghs_opaqueTokenValue";
     private const UnixFileMode SocketMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
@@ -34,20 +33,13 @@ public sealed class BrokerTransportTests : IAsyncLifetime
         RepositoryName.Parse("example-owner/example-repo");
 
     private readonly string _root = Directory.CreateTempSubdirectory("hga-tx").FullName;
-    private readonly string _credentialPath;
     private readonly string _socketPath;
 
     private WebApplication? _app;
-    private int _tcpPort;
 
     public BrokerTransportTests()
-    {
-        _credentialPath = Path.Combine(_root, "credential");
-        File.WriteAllText(_credentialPath, Credential);
-
         // Short by necessity: a socket path is limited to about 104 bytes.
-        _socketPath = Path.Combine("/tmp", $"hga-{Guid.NewGuid():N}"[..20] + ".sock");
-    }
+        => _socketPath = Path.Combine("/tmp", $"hga-{Guid.NewGuid():N}"[..20] + ".sock");
 
     public async ValueTask InitializeAsync()
     {
@@ -71,25 +63,16 @@ public sealed class BrokerTransportTests : IAsyncLifetime
 
         builder.Services.AddSingleton<IInstallationTokenIssuer, FixedTokenIssuer>();
         builder.Services.AddSingleton<TokenIssuingService>();
-        builder.Services.AddSingleton(ClientCredential.Load(_credentialPath));
 
-        // The composition root's own listener setup, so the body limit, the socket, and
-        // the marker that makes a TCP connection answerable to the credential gate are
-        // the ones the broker runs with.
+        // The composition root's own listener setup, so the body limit and the socket
+        // are the ones the broker runs with.
         builder.WebHost.UseBrokerListeners(
-            new ListenOptions(
-                new UnixSocketOptions(_socketPath, SocketMode),
-                new TcpListenerOptions(IPAddress.Loopback, 0, _credentialPath)
-            )
+            new ListenOptions(new UnixSocketOptions(_socketPath, SocketMode))
         );
 
         _app = builder.Build();
-        _app.UseClientCredentialGate();
         _app.MapBrokerApi();
         await _app.StartAsync();
-
-        _tcpPort = new Uri(_app.Urls.Single(url => url.StartsWith("http://127.0.0.1", StringComparison.Ordinal)))
-            .Port;
     }
 
     public async ValueTask DisposeAsync()
@@ -105,16 +88,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     }
 
     private HttpBrokerClient UnixClient()
-        => HttpBrokerClient.Create(
-            BrokerEndpoint.Parse($"unix://{_socketPath}"),
-            clientCredential: null
-        );
-
-    private HttpBrokerClient TcpClient(string? credential)
-        => HttpBrokerClient.Create(
-            BrokerEndpoint.Parse($"http://127.0.0.1:{_tcpPort}"),
-            credential
-        );
+        => HttpBrokerClient.Create(BrokerEndpoint.Parse($"unix://{_socketPath}"));
 
     [Fact]
     public async Task ServesATokenOverAUnixSocket()
@@ -128,7 +102,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ServesACheckOverAUnixSocketWithoutACredential()
+    public async Task ServesACheckWithoutACredential()
     {
         // Access to the socket is a filesystem question, so no shared secret is imposed.
         using var client = UnixClient();
@@ -139,48 +113,16 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ServesATokenOverTcpWithTheCredential()
-    {
-        using var client = TcpClient(Credential);
-
-        var response = await client.RequestTokenAsync(Allowlisted, CancellationToken.None);
-
-        Assert.Equal(Token, response.Token);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("wrong-credential-of-the-right-length")]
-    public async Task RefusesTcpWithoutTheRightCredential(string? credential)
-    {
-        using var client = TcpClient(credential);
-
-        var failure = await Assert.ThrowsAsync<BrokerClientException>(()
-            => client.RequestTokenAsync(Allowlisted, CancellationToken.None)
-        );
-
-        Assert.Equal(BrokerClientFailure.Unauthenticated, failure.Failure);
-    }
-
-    [Fact]
-    public async Task RefusesAnUnlistedRepositoryOnBothTransports()
+    public async Task RefusesAnUnlistedRepository()
     {
         var unlisted = RepositoryName.Parse("other/upstream");
+        using var client = UnixClient();
 
-        using var overSocket = UnixClient();
-        var socketFailure = await Assert.ThrowsAsync<BrokerClientException>(()
-            => overSocket.RequestTokenAsync(unlisted, CancellationToken.None)
+        var failure = await Assert.ThrowsAsync<BrokerClientException>(()
+            => client.RequestTokenAsync(unlisted, CancellationToken.None)
         );
 
-        Assert.Equal(BrokerClientFailure.Refused, socketFailure.Failure);
-
-        using var overTcp = TcpClient(Credential);
-        var tcpFailure = await Assert.ThrowsAsync<BrokerClientException>(()
-            => overTcp.RequestTokenAsync(unlisted, CancellationToken.None)
-        );
-
-        Assert.Equal(BrokerClientFailure.Refused, tcpFailure.Failure);
+        Assert.Equal(BrokerClientFailure.Refused, failure.Failure);
     }
 
     [Fact]

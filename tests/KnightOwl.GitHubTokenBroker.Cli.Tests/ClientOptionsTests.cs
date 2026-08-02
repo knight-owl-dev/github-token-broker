@@ -23,7 +23,7 @@ public sealed class ClientOptionsTests : IDisposable
     }
 
     [Fact]
-    public void ReadsAUnixSocketEndpointWithoutACredential()
+    public void ReadsAUnixSocketEndpoint()
     {
         Assert.True(
             ClientOptions.TryRead(
@@ -33,8 +33,7 @@ public sealed class ClientOptionsTests : IDisposable
             )
         );
 
-        Assert.Equal(BrokerEndpointKind.UnixSocket, options.Endpoint.Kind);
-        Assert.Null(options.ClientCredential);
+        Assert.Equal("/run/broker.sock", options.Endpoint.UnixSocketPath);
         Assert.Null(options.GitHubCliPath);
     }
 
@@ -50,6 +49,8 @@ public sealed class ClientOptionsTests : IDisposable
     [InlineData("   ")]
     [InlineData("broker.sock")]
     [InlineData("tcp://host:1")]
+    [InlineData("http://127.0.0.1:8765")]
+    [InlineData("https://broker.example.com")]
     public void RejectsAnUnusableEndpoint(string endpoint)
     {
         Assert.False(
@@ -61,99 +62,6 @@ public sealed class ClientOptionsTests : IDisposable
         );
 
         Assert.Contains(ClientOptions.EndpointVariable, error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void RequiresACredentialForAnHttpEndpoint()
-    {
-        // Plain TCP is reachable by anything that can route to the port, so the broker
-        // will refuse a request without the shared secret.
-        Assert.False(
-            ClientOptions.TryRead(
-                Environment((ClientOptions.EndpointVariable, "http://host.docker.internal:8765")),
-                out _,
-                out var error
-            )
-        );
-
-        Assert.Contains(ClientOptions.CredentialFileVariable, error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ReadsTheCredentialFromAFileAndStripsItsNewline()
-    {
-        var path = Path.Combine(_root, "credential");
-        File.WriteAllText(path, "a-high-entropy-value\n");
-
-        Assert.True(
-            ClientOptions.TryRead(
-                Environment(
-                    (ClientOptions.EndpointVariable, "http://host:8765"),
-                    (ClientOptions.CredentialFileVariable, path)
-                ),
-                out var options,
-                out _
-            )
-        );
-
-        Assert.Equal("a-high-entropy-value", options.ClientCredential);
-    }
-
-    [Fact]
-    public void PrefersTheCredentialFileOverTheInlineValue()
-    {
-        // A file can be restricted by ownership and mode; an environment variable is
-        // visible to anything that can read the process environment.
-        var path = Path.Combine(_root, "credential");
-        File.WriteAllText(path, "from-file");
-
-        Assert.True(
-            ClientOptions.TryRead(
-                Environment(
-                    (ClientOptions.EndpointVariable, "http://host:8765"),
-                    (ClientOptions.CredentialFileVariable, path),
-                    (ClientOptions.CredentialVariable, "from-environment")
-                ),
-                out var options,
-                out _
-            )
-        );
-
-        Assert.Equal("from-file", options.ClientCredential);
-    }
-
-    [Fact]
-    public void AcceptsAnInlineCredentialWhenNoFileIsGiven()
-    {
-        Assert.True(
-            ClientOptions.TryRead(
-                Environment(
-                    (ClientOptions.EndpointVariable, "http://host:8765"),
-                    (ClientOptions.CredentialVariable, "from-environment")
-                ),
-                out var options,
-                out _
-            )
-        );
-
-        Assert.Equal("from-environment", options.ClientCredential);
-    }
-
-    [Fact]
-    public void ReportsAnUnreadableCredentialFile()
-    {
-        Assert.False(
-            ClientOptions.TryRead(
-                Environment(
-                    (ClientOptions.EndpointVariable, "http://host:8765"),
-                    (ClientOptions.CredentialFileVariable, Path.Combine(_root, "absent"))
-                ),
-                out _,
-                out var error
-            )
-        );
-
-        Assert.Contains(ClientOptions.CredentialFileVariable, error, StringComparison.Ordinal);
     }
 
     [Fact]

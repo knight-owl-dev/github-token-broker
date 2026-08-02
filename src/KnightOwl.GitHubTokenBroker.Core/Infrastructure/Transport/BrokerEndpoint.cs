@@ -4,10 +4,12 @@ using System.Diagnostics.CodeAnalysis;
 namespace KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 
 /// <summary>
-/// Where the client reaches the broker: <c>unix:///absolute/path/broker.sock</c>
-/// or <c>http://host:port</c>. One abstraction covers both so Git and agent
-/// behavior is identical whichever form a deployment selects.
+/// Where the client reaches the broker: <c>unix:///absolute/path/broker.sock</c>.
 /// </summary>
+/// <remarks>
+/// A URI rather than a bare path, so a second transport arrives as a new scheme
+/// instead of breaking the endpoint clients already set.
+/// </remarks>
 public sealed class BrokerEndpoint
 {
     /// <summary>
@@ -16,24 +18,20 @@ public sealed class BrokerEndpoint
     /// </summary>
     private const string UnixSocketRequestAuthority = "http://localhost";
 
-    private BrokerEndpoint(BrokerEndpointKind kind, Uri baseUri, string? unixSocketPath)
+    private BrokerEndpoint(Uri baseUri, string unixSocketPath)
     {
-        this.Kind = kind;
         this.BaseUri = baseUri;
         this.UnixSocketPath = unixSocketPath;
     }
 
-    /// <summary>Which transport this endpoint names.</summary>
-    public BrokerEndpointKind Kind { get; }
-
-    /// <summary>Base address for request URIs on either transport.</summary>
+    /// <summary>Base address for request URIs.</summary>
     public Uri BaseUri { get; }
 
-    /// <summary>Socket path when <see cref="Kind"/> is a Unix socket.</summary>
-    public string? UnixSocketPath { get; }
+    /// <summary>The socket path to connect to.</summary>
+    public string UnixSocketPath { get; }
 
     /// <summary>Parses an endpoint, throwing when it is unusable.</summary>
-    /// <param name="value">A <c>unix://</c> or <c>http://</c> endpoint.</param>
+    /// <param name="value">A <c>unix://</c> endpoint.</param>
     /// <returns>The parsed endpoint.</returns>
     /// <exception cref="FormatException">The value does not name a supported endpoint.</exception>
     public static BrokerEndpoint Parse(string? value)
@@ -47,7 +45,7 @@ public sealed class BrokerEndpoint
     }
 
     /// <summary>Parses an endpoint without throwing.</summary>
-    /// <param name="value">A <c>unix://</c> or <c>http://</c> endpoint.</param>
+    /// <param name="value">A <c>unix://</c> endpoint.</param>
     /// <param name="endpoint">The parsed endpoint when parsing succeeds.</param>
     /// <param name="error">Why the value was refused, when parsing fails.</param>
     /// <returns><see langword="true"/> when the value names a supported endpoint.</returns>
@@ -80,11 +78,14 @@ public sealed class BrokerEndpoint
         return uri.Scheme switch
         {
             "unix" => TryParseUnix(uri, out endpoint, out error),
-            "http" => TryParseHttp(uri, out endpoint, out error),
 
-            // The broker's TCP listener serves plaintext, so an https endpoint would
-            // parse and then never connect.
-            "https" => Fail("endpoint scheme \"https\" is not served; the TCP listener is plaintext", out error),
+            // Named rather than left to the catch-all: both are plausible enough
+            // that "unsupported scheme" would read as a typo. Naming them also
+            // reserves the meaning, should a TLS transport want https back.
+            "http" or "https" => Fail(
+                $"endpoint scheme \"{uri.Scheme}\" is not served; the broker listens on a Unix socket",
+                out error
+            ),
             _ => Fail($"unsupported endpoint scheme \"{uri.Scheme}\"", out error),
         };
     }
@@ -110,35 +111,7 @@ public sealed class BrokerEndpoint
             return false;
         }
 
-        endpoint = new BrokerEndpoint(
-            BrokerEndpointKind.UnixSocket,
-            new Uri(UnixSocketRequestAuthority),
-            path
-        );
-
-        error = null;
-        return true;
-    }
-
-    private static bool TryParseHttp(
-        Uri uri,
-        [NotNullWhen(true)] out BrokerEndpoint? endpoint,
-        [NotNullWhen(false)] out string? error
-    )
-    {
-        endpoint = null;
-
-        if (uri.AbsolutePath is not ("" or "/"))
-        {
-            error = "http endpoint must not carry a path";
-            return false;
-        }
-
-        endpoint = new BrokerEndpoint(
-            BrokerEndpointKind.Http,
-            new Uri($"{uri.Scheme}://{uri.Authority}"),
-            null
-        );
+        endpoint = new BrokerEndpoint(new Uri(UnixSocketRequestAuthority), path);
 
         error = null;
         return true;
@@ -152,7 +125,5 @@ public sealed class BrokerEndpoint
 
     /// <inheritdoc/>
     public override string ToString()
-        => this.Kind == BrokerEndpointKind.UnixSocket
-            ? $"unix://{this.UnixSocketPath}"
-            : this.BaseUri.ToString();
+        => $"unix://{this.UnixSocketPath}";
 }

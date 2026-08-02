@@ -1,9 +1,10 @@
 namespace KnightOwl.GitHubTokenBroker.Infrastructure.Configuration;
 
-/// <summary>
-/// Where the broker listens. At least one form is required; both may run at once
-/// so one host can serve a mounted socket and a Docker Desktop client together.
-/// </summary>
-/// <param name="UnixSocket">The socket listener, or <see langword="null"/>.</param>
-/// <param name="Tcp">The TCP listener, or <see langword="null"/>.</param>
-public sealed record ListenOptions(UnixSocketOptions? UnixSocket, TcpListenerOptions? Tcp);
+/// <summary>Where the broker listens.</summary>
+/// <param name="UnixSocket">The socket listener.</param>
+/// <remarks>
+/// One transport, so who may mint is a filesystem question with one answer.
+/// Still a record, since it mirrors the <c>listen</c> section, which grows a
+/// member if a cross-host transport is ever added.
+/// </remarks>
+public sealed record ListenOptions(UnixSocketOptions UnixSocket);

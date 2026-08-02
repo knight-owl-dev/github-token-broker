@@ -32,40 +32,33 @@ public static class BrokerHttpClientFactory
     {
         ArgumentNullException.ThrowIfNull(endpoint);
 
-        // Validated before anything is allocated, so a rejected endpoint cannot
-        // abandon a handler.
-        var socketPath = endpoint.Kind == BrokerEndpointKind.UnixSocket
-            ? endpoint.UnixSocketPath ?? throw new ArgumentException("the endpoint names no socket path", nameof(endpoint))
-            : null;
+        var socketPath = endpoint.UnixSocketPath;
 
         SocketsHttpHandler handler = new();
         try
         {
-            if (socketPath is not null)
+            // HTTP over a Unix socket: the request URI's host is never resolved,
+            // because every connection goes to this path.
+            handler.ConnectCallback = async (_, cancellationToken) =>
             {
-                // HTTP over a Unix socket: the request URI's host is never resolved,
-                // because every connection goes to this path.
-                handler.ConnectCallback = async (_, cancellationToken) =>
+                Socket socket = new(
+                    AddressFamily.Unix,
+                    SocketType.Stream,
+                    ProtocolType.Unspecified
+                );
+
+                try
                 {
-                    Socket socket = new(
-                        AddressFamily.Unix,
-                        SocketType.Stream,
-                        ProtocolType.Unspecified
-                    );
+                    await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken);
 
-                    try
-                    {
-                        await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken);
-
-                        return new NetworkStream(socket, ownsSocket: true);
-                    }
-                    catch
-                    {
-                        socket.Dispose();
-                        throw;
-                    }
-                };
-            }
+                    return new NetworkStream(socket, ownsSocket: true);
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            };
 
             // The client takes ownership of the handler, so disposing the client
             // disposes both.

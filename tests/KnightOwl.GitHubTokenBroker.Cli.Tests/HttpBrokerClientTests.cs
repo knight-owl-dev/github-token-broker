@@ -37,14 +37,13 @@ public sealed class HttpBrokerClientTests
     private static readonly BrokerEndpoint Endpoint =
         BrokerEndpoint.Parse("unix:///run/github-token-broker/broker.sock");
 
-    private static HttpBrokerClient Client(StubHandler handler, string? credential = null)
+    private static HttpBrokerClient Client(StubHandler handler)
         => new(
             new HttpClient(handler)
             {
                 BaseAddress = Endpoint.BaseUri,
             },
-            Endpoint,
-            credential
+            Endpoint
         );
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body)
@@ -100,32 +99,6 @@ public sealed class HttpBrokerClientTests
         );
     }
 
-    [Fact]
-    public async Task SendsTheCredentialHeaderOnlyWhenOneIsConfigured()
-    {
-        StubHandler withCredential = new(_ => Json(
-                HttpStatusCode.OK,
-                """{ "token": "t", "expires_at": "2099-01-01T00:00:00Z" }"""
-            )
-        );
-
-        using var authenticated = Client(withCredential, "a-secret");
-        await authenticated.RequestTokenAsync(Repository, CancellationToken.None);
-
-        Assert.True(withCredential.LastRequest!.Headers.Contains(BrokerProtocol.ClientCredentialHeader));
-
-        StubHandler withoutCredential = new(_ => Json(
-                HttpStatusCode.OK,
-                """{ "token": "t", "expires_at": "2099-01-01T00:00:00Z" }"""
-            )
-        );
-
-        using var anonymous = Client(withoutCredential);
-        await anonymous.RequestTokenAsync(Repository, CancellationToken.None);
-
-        Assert.False(withoutCredential.LastRequest!.Headers.Contains(BrokerProtocol.ClientCredentialHeader));
-    }
-
     /// <param name="status">The status the broker answered with.</param>
     /// <param name="expected">How the client classifies it.</param>
     /// <remarks>
@@ -135,8 +108,8 @@ public sealed class HttpBrokerClientTests
     /// </remarks>
     [Theory]
     [InlineData(HttpStatusCode.Forbidden, BrokerClientFailure.Refused)]
-    [InlineData(HttpStatusCode.Unauthorized, BrokerClientFailure.Unauthenticated)]
     [InlineData(HttpStatusCode.Conflict, BrokerClientFailure.Misconfigured)]
+    [InlineData(HttpStatusCode.Unauthorized, BrokerClientFailure.Failed)]
     [InlineData(HttpStatusCode.ServiceUnavailable, BrokerClientFailure.Failed)]
     [InlineData(HttpStatusCode.InternalServerError, BrokerClientFailure.Failed)]
     [InlineData(HttpStatusCode.NotFound, BrokerClientFailure.Failed)]

@@ -43,6 +43,7 @@
     "unconfigured",
     "unmapped",
     "unrepresentable",
+    "unsets",
     "xunit"
   ],
   "ignorePaths": [

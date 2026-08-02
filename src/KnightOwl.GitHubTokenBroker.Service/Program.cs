@@ -46,7 +46,6 @@ catch (ConfigurationException exception)
     return BrokerExitCode.PrivateKey;
 }
 
-app.UseClientCredentialGate();
 app.MapBrokerApi();
 
 // Started rather than run, so the socket can be narrowed between binding and

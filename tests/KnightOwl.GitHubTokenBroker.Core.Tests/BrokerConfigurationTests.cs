@@ -13,7 +13,7 @@ public sealed class BrokerConfigurationTests
           "app_id": 123456,
           "installation_id": 789012,
           "private_key_path": "/keys/app.pem",
-          "listen": { "unix_socket": "/run/broker.sock" },
+          "listen": { "unix_socket": { "path": "/run/broker.sock" } },
           "repositories": {
             "example-owner/example-repo": {
               "permissions": { "contents": "write", "checks": "read" }
@@ -31,8 +31,7 @@ public sealed class BrokerConfigurationTests
         Assert.Equal(123456, configuration.AppId);
         Assert.Equal(789012, configuration.InstallationId);
         Assert.Equal("/keys/app.pem", configuration.PrivateKeyPath);
-        Assert.Equal("/run/broker.sock", configuration.Listen.UnixSocket!.Path);
-        Assert.Null(configuration.Listen.Tcp);
+        Assert.Equal("/run/broker.sock", configuration.Listen.UnixSocket.Path);
         Assert.Equal(new Uri(BrokerConfiguration.DefaultApiUrl), configuration.ApiBaseUri);
         Assert.Equal(BrokerConfiguration.DefaultRefreshMargin, configuration.RefreshMargin);
         Assert.Equal(1, configuration.Allowlist.Count);
@@ -49,7 +48,7 @@ public sealed class BrokerConfigurationTests
                   "installation_id": 2,
                   "private_key_path": "/k.pem",
                   "allow_everything": true,
-                  "listen": { "unix_socket": "/s.sock" },
+                  "listen": { "unix_socket": { "path": "/s.sock" } },
                   "repositories": { "o/r": { "permissions": { "contents": "read" } } }
                 }
                 """
@@ -61,30 +60,30 @@ public sealed class BrokerConfigurationTests
 
     [Theory]
     [InlineData(
-        """{ "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     [InlineData(
-        """{ "app_id": 1, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "app_id": 1, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "app_id": 1, "installation_id": 2, "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     public void RejectsAMissingRequiredMember(string json)
         => Rejects(json);
 
     [Theory]
     [InlineData(
-        """{ "app_id": 0, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "app_id": 0, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     [InlineData(
-        """{ "app_id": 1, "installation_id": -2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "app_id": 1, "installation_id": -2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     public void RejectsANonPositiveIdentifier(string json)
         => Rejects(json);
 
     [Theory]
     [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "app.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "app_id": 1, "installation_id": 2, "private_key_path": "app.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     public void RejectsARelativePrivateKeyPath(string json)
         => Rejects(json);
@@ -98,7 +97,7 @@ public sealed class BrokerConfigurationTests
 
     [Theory]
     [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "broker.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "broker.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     public void RejectsARelativeSocketPath(string json)
         => Rejects(json);
@@ -108,75 +107,82 @@ public sealed class BrokerConfigurationTests
     /// An allowlist that is empty and one that is absent are the same mistake.
     /// </remarks>
     [Theory]
-    [InlineData("""{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { } }""")]
-    [InlineData("""{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" } }""")]
+    [InlineData("""{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { } }""")]
+    [InlineData("""{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } } }""")]
     public void RejectsAnAllowlistThatServesNothing(string json)
         => Rejects(json);
 
     [Theory]
     [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { } } } }"""
+        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { } } } }"""
     )]
     public void RejectsAnAllowlistEntryWithNoPermissions(string json)
         => Rejects(json);
 
     [Theory]
     [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "workflows": "write" } } } }"""
+        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "workflows": "write" } } } }"""
     )]
     public void RejectsAPermissionThisBrokerNeverRequests(string json)
         => Rejects(json);
 
     [Theory]
     [InlineData(
-        """{ "github_host": "github.example.com", "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "github_host": "github.example.com", "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     public void RejectsAnUnsupportedHost(string json)
         => Rejects(json);
 
     [Theory]
     [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "https://github.com/o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "https://github.com/o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     public void RejectsAMalformedRepositoryKey(string json)
         => Rejects(json);
 
     [Theory]
     [InlineData(
-        """{ "api_url": "http://api.github.com", "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "api_url": "http://api.github.com", "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     public void RejectsPlaintextBeyondLoopback(string json)
         => Rejects(json);
 
     [Theory]
     [InlineData(
-        """{ "token_refresh_margin_seconds": 5, "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "token_refresh_margin_seconds": 5, "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     [InlineData(
-        """{ "token_refresh_margin_seconds": 3600, "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": "/s.sock" }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
+        """{ "token_refresh_margin_seconds": 3600, "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
     )]
     public void RejectsARefreshMarginOutsideItsBounds(string json)
         => Rejects(json);
 
-    /// <param name="json">A configuration document.</param>
     /// <remarks>
-    /// No credential path, a malformed address, a port out of range, and a relative credential path.
+    /// The transport this replaced. It fails as an unrecognized member rather
+    /// than being ignored, so an old document stops the broker instead of
+    /// silently binding nothing.
     /// </remarks>
-    [Theory]
-    [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "tcp": { "address": "127.0.0.1", "port": 8765 } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
-    )]
-    [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "tcp": { "address": "not-an-ip", "port": 8765, "client_credential_path": "/c" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
-    )]
-    [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "tcp": { "address": "127.0.0.1", "port": 0, "client_credential_path": "/c" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
-    )]
-    [InlineData(
-        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "tcp": { "address": "127.0.0.1", "port": 8765, "client_credential_path": "relative" } }, "repositories": { "o/r": { "permissions": { "contents": "read" } } } }"""
-    )]
-    public void RejectsAnUnusableTcpSection(string json)
-        => Rejects(json);
+    [Fact]
+    public void RejectsAConfigurationStillNamingTcp()
+    {
+        var failure = Assert.Throws<ConfigurationException>(() => BrokerConfiguration.FromJson(
+                """
+                {
+                  "app_id": 1,
+                  "installation_id": 2,
+                  "private_key_path": "/k.pem",
+                  "listen": {
+                    "unix_socket": { "path": "/s.sock" },
+                    "tcp": { "address": "127.0.0.1", "port": 8765 }
+                  },
+                  "repositories": { "o/r": { "permissions": { "contents": "read" } } }
+                }
+                """
+            )
+        );
+
+        Assert.Contains("schema", failure.Message, StringComparison.Ordinal);
+    }
 
     private static void Rejects(string json)
         => Assert.Throws<ConfigurationException>(() => BrokerConfiguration.FromJson(json));
@@ -192,7 +198,7 @@ public sealed class BrokerConfigurationTests
                   "app_id": 1,
                   "installation_id": 2,
                   "private_key_path": "/k.pem",
-                  "listen": { "unix_socket": "/s.sock" },
+                  "listen": { "unix_socket": { "path": "/s.sock" } },
                   "repositories": {
                     "Owner/Repo": { "permissions": { "contents": "write" } },
                     "owner/repo": { "permissions": { "contents": "read" } }
@@ -216,7 +222,7 @@ public sealed class BrokerConfigurationTests
                   "app_id": 1,
                   "installation_id": 2,
                   "private_key_path": "/k.pem",
-                  "listen": { "unix_socket": "{{tooLong}}" },
+                  "listen": { "unix_socket": { "path": "{{tooLong}}" } },
                   "repositories": { "o/r": { "permissions": { "contents": "read" } } }
                 }
                 """
@@ -236,7 +242,7 @@ public sealed class BrokerConfigurationTests
               "app_id": 1,
               "installation_id": 2,
               "private_key_path": "/k.pem",
-              "listen": { "unix_socket": "/s.sock" },
+              "listen": { "unix_socket": { "path": "/s.sock" } },
               "repositories": { "o/r": { "permissions": { "contents": "read" } } }
             }
             """

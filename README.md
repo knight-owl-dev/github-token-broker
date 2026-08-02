@@ -126,8 +126,10 @@ secret to distribute, rotate, or leak.
   "installation_id": 789012,
   "private_key_path": "/etc/github-token-broker/app.pem",
   "listen": {
-    "unix_socket": "/run/github-token-broker/broker.sock",
-    "unix_socket_mode": "0600"
+    "unix_socket": {
+      "path": "/run/github-token-broker/broker.sock",
+      "mode": "0600"
+    }
   },
   "repositories": {
     "example-owner/example-repo": {
@@ -139,105 +141,38 @@ secret to distribute, rotate, or leak.
 
 | Setting | | Meaning |
 | --- | --- | --- |
-| `unix_socket` | required | Absolute path to bind. Within the platform's `sockaddr_un` limit — 104 bytes on macOS, 108 on Linux. |
-| `unix_socket_mode` | `0600` | Three octal digits. Connecting needs write permission, so this is who may mint. |
+| `unix_socket.path` | required | Absolute path to bind. Within the platform's `sockaddr_un` limit — 104 bytes on macOS, 108 on Linux. |
+| `unix_socket.mode` | `0600` | Three octal digits. Connecting needs write permission, so this is who may mint. |
 
 Anyone who can write the socket can mint for the whole allowlist, so a mode
 granting write to others is refused. Sharing with a group is `"0660"` plus group
 ownership from the service unit. The socket's directory is the outer half of the
 same control — see [Transports](#transports).
 
-### Listening on TCP
+### Reaching it from a container
 
-For a caller that cannot see the host filesystem, such as a container reaching
-its host. Filesystem permissions mean nothing across that boundary, so a shared
-secret takes their place.
-
-```json
-{
-  "app_id": 123456,
-  "installation_id": 789012,
-  "private_key_path": "/etc/github-token-broker/app.pem",
-  "listen": {
-    "tcp": {
-      "address": "127.0.0.1",
-      "port": 8765,
-      "client_credential_path": "/etc/github-token-broker/client-credential"
-    }
-  },
-  "repositories": {
-    "example-owner/example-repo": {
-      "permissions": { "contents": "write", "pull_requests": "write" }
-    }
-  }
-}
-```
-
-| Setting | | Meaning |
-| --- | --- | --- |
-| `address` | required | The IP address to bind. Loopback or private only. |
-| `port` | required | The port to bind, 1–65535. |
-| `client_credential_path` | required | Absolute path to a file holding the client credential. |
-
-There is no TLS, so the credential crosses the connection in cleartext and this
-transport reaches no further than the host and its private network. Startup
-refuses a public address, and refuses `0.0.0.0` and `::` as well — a wildcard
-covers every interface the host has, including ones it may grow later, so name
-the interface instead. A container reaching its host names the bridge, commonly
-`172.17.0.1`.
-
-The **client credential** is a high-entropy shared secret, at least 32
-characters, that a TCP client sends in the `X-GitHub-Token-Broker-Credential`
-header. It is compared in constant time and never logged. It authorizes reaching
-this service and nothing more: it is not a GitHub credential, grants no
-permission of its own, and is not the App private key.
-
-It belongs to the endpoint rather than to a caller. One value serves every TCP
-client, the service never learns which one is asking, and presenting it confers
-the whole allowlist — the same reach that write permission on the socket confers
-locally. There is no way to withdraw it from one caller alone.
-
-It is configured as a *path* rather than a value so it can be protected and
-rotated on its own terms — the configuration file names no secrets and can be
-read by anyone who needs to understand the deployment, while the credential file
-carries the ownership and mode of a secret. Generate one with:
+Bind-mount the socket. One socket serves any number of containers at once, and
+no shared secret is involved:
 
 ```sh
-openssl rand -hex 32 > /etc/github-token-broker/client-credential
-chmod 0600 /etc/github-token-broker/client-credential
+docker run \
+  -v /run/github-token-broker/broker.sock:/broker.sock \
+  -e GITHUB_TOKEN_BROKER_ENDPOINT=unix:///broker.sock \
+  my-bot-image
 ```
 
-A trailing newline is stripped, since that is what every editor and `openssl`
-pipeline leaves behind. The client reads the same value from
-`GITHUB_TOKEN_BROKER_CREDENTIAL_FILE`.
+The container's process needs write permission on the socket. On Linux the
+mount keeps the host's owner, group, and mode, so a container running as another
+user needs `--user` matching the owner or `--group-add` against a `0660` socket.
+Docker Desktop re-owns the socket to `root` inside the container, so a root
+container connects with no further arrangement.
 
-This file is read once at startup, unlike the private key. Rotating it means
-replacing the file, restarting the service, and updating every client together.
+There is no network transport. A caller that cannot see the host filesystem has
+no route to the service.
 
-### Listening on both
-
-One service can serve local processes over the socket and a container over TCP
-at the same time. The credential requirement follows the connection rather than
-the service: a request arriving on TCP must present it, and a request arriving
-on the socket must not be asked for one.
-
-```json
-{
-  "listen": {
-    "unix_socket": "/run/github-token-broker/broker.sock",
-    "unix_socket_mode": "0600",
-    "tcp": {
-      "address": "127.0.0.1",
-      "port": 8765,
-      "client_credential_path": "/etc/github-token-broker/client-credential"
-    }
-  }
-}
-```
-
-`listen` must configure `unix_socket`, `tcp`, or both. A `listen` section
-configuring neither is refused, as is `unix_socket_mode` without a socket to
-apply it to.
+`listen` must configure `unix_socket`. Each transport is one object rather than
+a flat set of prefixed keys, so a second one arrives beside it instead of
+alongside its members.
 
 ## Use it from Git
 
@@ -284,9 +219,7 @@ behind.
 
 | Variable | Purpose |
 | --- | --- |
-| `GITHUB_TOKEN_BROKER_ENDPOINT` | required; `unix:///path/to/broker.sock` or `http://host:port` |
-| `GITHUB_TOKEN_BROKER_CREDENTIAL_FILE` | credential for an HTTP endpoint; preferred |
-| `GITHUB_TOKEN_BROKER_CREDENTIAL` | credential inline; visible to anything that can read this process's environment |
+| `GITHUB_TOKEN_BROKER_ENDPOINT` | required; `unix:///path/to/broker.sock` |
 | `GITHUB_TOKEN_BROKER_GH` | explicit path to the real GitHub CLI |
 
 ### Commands
@@ -379,10 +312,6 @@ moment between binding and the mode being applied: the broker creates it `0700`
 when absent, and refuses to start when it already exists and is writable by
 anyone but its owner — unless the sticky bit is set, which is what makes a
 shared directory like `/tmp` safe.
-
-Connections arriving over TCP are marked at the listener, which is what lets
-both listeners run at once with the credential required on one and not the
-other.
 
 Binding fails if the socket path is occupied, and nothing is removed to free it:
 a socket left by an unclean shutdown reads the same as a mistyped path naming a

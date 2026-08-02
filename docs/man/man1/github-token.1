@@ -219,33 +219,16 @@ does not make it launch itself.
 .It Ev GITHUB_TOKEN_BROKER_ENDPOINT
 Required.
 Where the broker is, as
-.Ql unix:///absolute/path/to/broker.sock
-or
-.Ql http://host:port .
-Matches the socket or address the broker binds.
-A query or fragment is refused.
-.It Ev GITHUB_TOKEN_BROKER_CREDENTIAL_FILE
-Path to a file holding the shared credential an
-.Ql http://
-endpoint requires.
-A trailing newline is stripped.
-Preferred over the variable below, since a file carries ownership and a mode
-while an environment variable is visible to anything that can read this
-process's environment.
-.It Ev GITHUB_TOKEN_BROKER_CREDENTIAL
-The credential itself, when a file is impractical.
-Ignored when the file variable is set.
+.Ql unix:///absolute/path/to/broker.sock ,
+matching the socket the broker binds.
+A query or fragment is refused, as is any other scheme.
 .It Ev GITHUB_TOKEN_BROKER_GH
 Absolute path to the real GitHub CLI, when it should not be searched for.
 .El
 .Pp
-An
-.Ql http://
-endpoint requires one of the two credential variables.
-A
-.Ql unix://
-endpoint takes neither, since filesystem permissions on the socket are the
-authorization.
+No credential variable exists.
+Write permission on the socket is the authorization, so there is no shared
+secret to distribute or rotate.
 .\" -------------------------------------------------------------------------
 .Sh EXIT STATUS
 Following the conventional
@@ -263,8 +246,7 @@ The broker answered but could not serve the request.
 Its log holds the reason; see DIAGNOSTICS in
 .Xr github-token-broker 8 .
 .It Sy 77
-The broker refused the repository, or rejected the client credential.
-The message says which.
+The broker refused the repository.
 .It Sy 78
 The repository is allowlisted but the App installation does not grant it, so
 retrying cannot help.
@@ -287,47 +269,35 @@ Clone over HTTPS once the helper is configured:
 Open a pull request as the App:
 .Dl $ github-token gh example-owner/example-repo \-\- pr create \-\-fill
 .Pp
-Reach a broker on the host from inside a container.
-The credential is the same either way:
+Reach a broker on the host from inside a container by bind-mounting its socket.
+One socket serves any number of containers at once:
 .Bd -literal -offset indent
-export GITHUB_TOKEN_BROKER_CREDENTIAL_FILE=\e
-    /run/secrets/broker-credential
+$ docker run \e
+    -v /run/github-token-broker/broker.sock:/broker.sock \e
+    -e GITHUB_TOKEN_BROKER_ENDPOINT=unix:///broker.sock \e
+    my-bot-image
 .Ed
 .Pp
-The host's address is not.
-See
-.Ic listen.tcp.address
-in
-.Xr github-token-broker-config 5
-for what the broker will bind.
-.\"
-.Ss Docker on Linux
-The bridge gateway is the host itself, commonly
-.Ql 172.17.0.1 ;
-confirm with
-.Ql ip route show default
-inside the container, since a user-defined network uses another subnet.
-.Bd -literal -offset indent
-export GITHUB_TOKEN_BROKER_ENDPOINT=http://172.17.0.1:8765
-.Ed
+The container's process needs write permission on the socket:
+.Bl -tag -width Ds
+.It Linux
+The mount keeps the host's owner, group, and mode.
+A container running as another user needs
+.Fl -user
+matching the owner, or
+.Fl -group-add
+against a
+.Ql 0660
+socket.
+.It Docker Desktop
+The file sharing layer re-owns the socket to
+.Ql root
+inside the container, so a container running as root connects with no further
+arrangement.
+.El
 .Pp
-The broker binds that same address.
-A listener on
-.Ql 127.0.0.1
-is the host's own loopback and is not reachable across the bridge.
-.\"
-.Ss Docker Desktop on macOS
-Containers run in a virtual machine that forwards to the host, so the broker
-may stay on
-.Ql 127.0.0.1 .
-.Bd -literal -offset indent
-export GITHUB_TOKEN_BROKER_ENDPOINT=\e
-    http://host.docker.internal:8765
-.Ed
-.Pp
-.Ql 172.17.0.1
-is the container's default route here too and still reaches nothing, because
-that gateway is the virtual machine rather than the host.
+There is no network transport, so a caller that cannot see the host filesystem
+has no route to the broker.
 .\" -------------------------------------------------------------------------
 .Sh SEE ALSO
 .Xr gh 1 ,

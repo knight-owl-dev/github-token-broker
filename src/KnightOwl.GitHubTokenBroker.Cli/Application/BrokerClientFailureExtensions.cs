@@ -14,11 +14,6 @@ internal static class BrokerClientFailureExtensions
             {
                 BrokerClientFailure.Unavailable => CliExitCode.Unavailable,
                 BrokerClientFailure.Refused => CliExitCode.NotAuthorized,
-
-                // Same status as a refused repository, since both are permission;
-                // the message carries which.
-                BrokerClientFailure.Unauthenticated => CliExitCode.NotAuthorized,
-
                 BrokerClientFailure.Failed => CliExitCode.Internal,
                 BrokerClientFailure.Misconfigured => CliExitCode.Configuration,
             };

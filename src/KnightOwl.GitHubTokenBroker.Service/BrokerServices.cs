@@ -63,13 +63,6 @@ internal static class BrokerServices
                     provider.GetRequiredService<ILogger<GitHubInstallationTokenIssuer>>()
                 )
             );
-
-            // Registered only for the transport that requires it, which is what lets the
-            // credential gate treat a missing registration as a refusal.
-            if (configuration.Listen.Tcp is { } tcp)
-            {
-                services.AddSingleton(ClientCredential.Load(tcp.ClientCredentialPath));
-            }
         }
     }
 }

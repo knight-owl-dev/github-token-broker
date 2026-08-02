@@ -62,6 +62,12 @@ written on and wrong on the other — `connect` to an ordinary Unix path answers
 or a `SocketError` needs a case in `tests/integration`, the only thing that runs
 the real binaries on a real distro.
 
+**`ENV=host` inherits the terminal's environment**, so an assertion that a
+variable is absent decides by who ran it: `GIT_TERMINAL_PROMPT=0` closes the
+terminal prompt, and an askpass helper answers the same question anyway.
+`run-cases.sh` unsets what a case asserts about, being the one file both
+environments enter through. `ENV=container` starts clean regardless.
+
 **`IDE1006` naming violations cannot be auto-fixed**, so `make lint-fix` leaves
 them and the rename has to be deliberate.
 

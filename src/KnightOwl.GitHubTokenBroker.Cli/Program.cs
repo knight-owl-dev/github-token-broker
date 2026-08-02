@@ -36,7 +36,7 @@ if (!ClientOptions.TryRead(Environment.GetEnvironmentVariable, out var options, 
     return CliExitCode.Usage;
 }
 
-using var broker = HttpBrokerClient.Create(options.Endpoint, options.ClientCredential);
+using var broker = HttpBrokerClient.Create(options.Endpoint);
 
 switch (args[0])
 {

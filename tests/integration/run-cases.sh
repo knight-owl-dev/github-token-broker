@@ -24,9 +24,12 @@ source "${SCRIPT_DIR}/lib/format.sh"
 # A developer running this has a shell configured for their own broker. Every
 # case names the endpoint it means, so inheriting one can only mislead.
 unset GITHUB_TOKEN_BROKER_ENDPOINT
-unset GITHUB_TOKEN_BROKER_CREDENTIAL
-unset GITHUB_TOKEN_BROKER_CREDENTIAL_FILE
 unset GITHUB_TOKEN_BROKER_GH
+
+# The terminal answers for Git too: an askpass helper supplies a credential
+# where GIT_TERMINAL_PROMPT only closes the prompt, and GIT_CONFIG_COUNT
+# injects settings past any config file a case redirects.
+unset GIT_ASKPASS SSH_ASKPASS GIT_CONFIG_COUNT
 
 selected=("$@")
 

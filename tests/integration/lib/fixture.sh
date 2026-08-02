@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 #
-# The App key, the configuration file, and the TCP client credential.
+# The App key and the configuration file.
 #
 # Nothing here is a real secret: the key is generated per case, and no token it
 # produces is valid anywhere.
@@ -65,27 +65,11 @@ fixture_github_requests() {
   fi
 }
 
-fixture_credential() {
-  openssl rand -hex 32 > "$1"
-}
-
-# A port nothing is listening on. The broker needs one written into its
-# configuration before it binds, so it cannot ask the kernel for an ephemeral
-# one, and a fixed number would collide with whatever else the machine runs.
-fixture_free_port() {
-  python3 -c 'import socket
-probe = socket.socket()
-probe.bind(("127.0.0.1", 0))
-print(probe.getsockname()[1])
-probe.close()'
-}
-
 # fixture_config PATH KEY_PATH [OPTION...]
 #
 #   --socket PATH
 #   --socket-mode MODE
 #   --api-url URL
-#   --tcp ADDRESS PORT CREDENTIAL_PATH
 #
 # Members are omitted rather than defaulted, so a case can exercise what the
 # broker does when one is absent.
@@ -95,7 +79,6 @@ fixture_config() {
   shift 2
 
   local socket="" socket_mode="" api_url=""
-  local tcp_address="" tcp_port="" tcp_credential=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -111,12 +94,6 @@ fixture_config() {
         api_url="$2"
         shift 2
         ;;
-      --tcp)
-        tcp_address="$2"
-        tcp_port="$3"
-        tcp_credential="$4"
-        shift 4
-        ;;
       *)
         echo "fixture_config: unknown option $1" >&2
         return 1
@@ -124,19 +101,19 @@ fixture_config() {
     esac
   done
 
-  local listen_members=()
+  local socket_members=()
   if [[ -n "${socket}" ]]; then
-    listen_members+=("    \"unix_socket\": \"${socket}\"")
+    socket_members+=("      \"path\": \"${socket}\"")
     mkdir -p "$(dirname "${socket}")"
   fi
   if [[ -n "${socket_mode}" ]]; then
-    listen_members+=("    \"unix_socket_mode\": \"${socket_mode}\"")
+    socket_members+=("      \"mode\": \"${socket_mode}\"")
   fi
-  if [[ -n "${tcp_address}" ]]; then
-    listen_members+=("    \"tcp\": {
-      \"address\": \"${tcp_address}\",
-      \"port\": ${tcp_port},
-      \"client_credential_path\": \"${tcp_credential}\"
+
+  local listen_members=()
+  if [[ ${#socket_members[@]} -gt 0 ]]; then
+    listen_members+=("    \"unix_socket\": {
+$(join_members "${socket_members[@]}")
     }")
   fi
 
