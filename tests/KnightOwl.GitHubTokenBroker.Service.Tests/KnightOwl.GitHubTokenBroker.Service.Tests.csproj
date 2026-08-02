@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <RootNamespace>KnightOwl.GitHubTokenBroker.Service.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../src/KnightOwl.GitHubTokenBroker.Service/KnightOwl.GitHubTokenBroker.Service.csproj"/>
+        <!-- The transport tests drive the real client against the real server. -->
+        <ProjectReference Include="../../src/KnightOwl.GitHubTokenBroker.Cli/KnightOwl.GitHubTokenBroker.Cli.csproj"/>
+    </ItemGroup>
+
+</Project>

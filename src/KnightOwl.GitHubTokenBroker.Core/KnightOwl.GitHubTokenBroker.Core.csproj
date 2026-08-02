@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <RootNamespace>KnightOwl.GitHubTokenBroker</RootNamespace>
+        <!-- Surfaces trim and AOT warnings here rather than at publish time -->
+        <IsAotCompatible>true</IsAotCompatible>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="KnightOwl.GitHubTokenBroker.Core.Tests"/>
+    </ItemGroup>
+
+</Project>

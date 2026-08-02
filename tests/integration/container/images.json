@@ -1,0 +1,15 @@
+[
+  {
+    "image": "ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90",
+    "proves": "the glibc floor itself",
+    "floor": true
+  },
+  {
+    "image": "debian:trixie@sha256:fac46bff2e02f51425b6e33b0e1169f55dfb053d83511ca28aa50c09fd5ed7a4",
+    "proves": "a newer glibc and a Debian userland"
+  },
+  {
+    "image": "fedora:42@sha256:99e203b80b1c3d8f7e161ec10a68fd02b081ef83a3963553e513c82846b97814",
+    "proves": "an RPM userland, where /run and the package names differ"
+  }
+]

@@ -1,0 +1,33 @@
+# The linters at the versions CI enforces, so the image settles a disagreement
+# with whatever a developer has installed. Driven by `make lint ENV=container`.
+#
+# Networked, because validate-action-pins resolves each pin against the GitHub
+# API.
+
+services:
+  lint:
+    image: ghcr.io/knight-owl-dev/ci-tools:latest@sha256:3be3c8cf78282e66d749599984727f168e3bdee77e3df2311f863af519ab8247
+    user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
+    working_dir: /workspace
+    read_only: true
+    network_mode: none
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    environment:
+      HOME: /tmp
+      # Raises the API budget from 60 requests an hour to 5,000; once it is
+      # spent, the pin check warns and skips. Defaulted empty so an unset token
+      # is not a compose warning.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # git refuses a repository owned by someone other than the caller, and
+      # the checkout belongs to whoever cloned it. Passed as configuration
+      # because there is nowhere writable to put a file.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /workspace
+    volumes:
+      - ../../:/workspace:ro

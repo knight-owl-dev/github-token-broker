@@ -1,0 +1,21 @@
+<Project>
+
+  <!--
+    Central package management, repo-wide: a PackageReference without a matching
+    PackageVersion fails, so a version cannot be pinned quietly inside a project.
+    Only the repo-wide analyzers are declared here. The shipped assemblies carry no
+    third-party runtime package — JWT signing, HTTP, JSON, sockets, process
+    control, and hosting all come from the framework — and test-only versions live
+    in tests/Directory.Packages.props.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.7.23" />
+    <PackageVersion Include="Roslynator.Analyzers" Version="4.15.0" />
+  </ItemGroup>
+
+</Project>

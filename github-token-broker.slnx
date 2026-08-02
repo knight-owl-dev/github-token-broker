@@ -1,0 +1,12 @@
+<Solution>
+    <Folder Name="/src/">
+        <Project Path="src/KnightOwl.GitHubTokenBroker.Cli/KnightOwl.GitHubTokenBroker.Cli.csproj"/>
+        <Project Path="src/KnightOwl.GitHubTokenBroker.Core/KnightOwl.GitHubTokenBroker.Core.csproj"/>
+        <Project Path="src/KnightOwl.GitHubTokenBroker.Service/KnightOwl.GitHubTokenBroker.Service.csproj"/>
+    </Folder>
+    <Folder Name="/tests/">
+        <Project Path="tests/KnightOwl.GitHubTokenBroker.Cli.Tests/KnightOwl.GitHubTokenBroker.Cli.Tests.csproj"/>
+        <Project Path="tests/KnightOwl.GitHubTokenBroker.Core.Tests/KnightOwl.GitHubTokenBroker.Core.Tests.csproj"/>
+        <Project Path="tests/KnightOwl.GitHubTokenBroker.Service.Tests/KnightOwl.GitHubTokenBroker.Service.Tests.csproj"/>
+    </Folder>
+</Solution>

@@ -1,0 +1,9 @@
+{
+  "sdk": {
+    "version": "10.0.302",
+    "rollForward": "latestPatch"
+  },
+  "knightOwl": {
+    "buildImage": "mcr.microsoft.com/dotnet/sdk:10.0.302-noble-aot@sha256:dbf0906fc695ba77ea281f62e9f139f34827d520f0a0900fd939c6297515d43f"
+  }
+}

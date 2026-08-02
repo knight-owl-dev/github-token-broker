@@ -1,0 +1,9 @@
+# The build context is the repository root, so the publish inside sees the same
+# sources a local `make publish` does. Everything below is output or noise.
+.git/
+.scratch/
+.github/
+docs/
+**/artifacts/
+**/bin/
+**/obj/

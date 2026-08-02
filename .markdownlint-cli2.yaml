@@ -1,0 +1,29 @@
+# markdownlint-cli2 configuration.
+#
+# Holds the globs as well as the rules, so `make lint-markdown` invokes the tool
+# with no arguments and an editor's markdownlint plugin sees the same set.
+
+globs:
+  - "**/*.md"
+
+# .scratch/ is a gitignored working directory for drafts and issue text, and
+# artifacts/ is build output. Neither ships, so neither is linted.
+ignores:
+  - ".scratch"
+  - ".scratch/**"
+  - "artifacts"
+  - "artifacts/**"
+
+config:
+  MD007:
+    indent: 4
+  MD013: false
+  MD024:
+    siblings_only: true
+  MD029: false
+  MD031:
+    list_items: false
+  MD033:
+    allowed_elements:
+      - number
+  MD041: false

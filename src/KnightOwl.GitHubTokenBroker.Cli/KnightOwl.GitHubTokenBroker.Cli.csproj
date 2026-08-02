@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <RootNamespace>KnightOwl.GitHubTokenBroker.Cli</RootNamespace>
+        <AssemblyName>github-token</AssemblyName>
+        <OutputType>Exe</OutputType>
+        <Authors>Oleksandr Akhtyrskiy</Authors>
+        <Company>Knight Owl LLC</Company>
+        <Copyright>© 2026 Knight Owl LLC. All rights reserved.</Copyright>
+        <Description>Git credential helper and GitHub CLI launcher for github-token-broker.</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    </PropertyGroup>
+
+
+    <PropertyGroup>
+        <!-- Native ahead-of-time: a real binary with no runtime to install and a
+             startup measured in milliseconds. The credential helper is spawned by
+             Git on every remote operation, so startup is the dominant cost. -->
+        <PublishAot>true</PublishAot>
+        <StripSymbols>true</StripSymbols>
+        <InvariantGlobalization>true</InvariantGlobalization>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../KnightOwl.GitHubTokenBroker.Core/KnightOwl.GitHubTokenBroker.Core.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="KnightOwl.GitHubTokenBroker.Cli.Tests"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+# LF in the repository and in every working tree. Without eol, a Windows
+# checkout converts back to CRLF and the shell scripts stop running.
+* text=auto eol=lf
+
+# Forced text, so a NUL cannot flip one of these to binary and take its diff out
+# of review. Keeping the NUL out belongs to check-control-characters.sh, which
+# covers the same set.
+*.cs text
+*.json text
+*.md text
+*.props text
+*.py text
+*.sh text
+*.slnx text
+*.yaml text
+*.yml text

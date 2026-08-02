@@ -1,0 +1,62 @@
+<Project>
+    <PropertyGroup>
+        <!-- Use consistent language features and framework -->
+        <LangVersion>latest</LangVersion>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <AnalysisLevel>latest-all</AnalysisLevel>
+        <!-- CA1515: public/internal distinction is not meaningful for application types -->
+        <!-- CA1716: Identifier/keyword conflicts with other languages are not a concern for a C#-only app -->
+        <!-- CA2007: ConfigureAwait is not meaningful in a console application with no synchronization context -->
+        <!-- CA1008: these enums deliberately omit a zero member, so a defaulted value is detectably invalid rather than silently meaningful -->
+        <!-- CA1032: every exception here carries a required failure classification; a parameterless constructor would produce an unclassified instance -->
+        <!-- CA1849: console writes in a short-lived CLI are synchronous by design; ordering and flush-before-exit matter more than not blocking -->
+        <NoWarn>$(NoWarn);CA1008;CA1032;CA1515;CA1716;CA1849;CA2007;VSTHRD103</NoWarn>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <!-- One version for both executables: they ship as one package under one
+             tag. AssemblyVersion, FileVersion, and InformationalVersion derive
+             from this, so it is the only place the version is written. -->
+        <Version>0.1.0</Version>
+
+        <!-- Public API is documented; CS1591 fails the build on an omission -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+        <!-- Remove libicu dependency for cross-distro compatibility -->
+        <InvariantGlobalization>true</InvariantGlobalization>
+
+        <!-- Compile time platform (simplified to avoid mismatch) -->
+        <Platforms>AnyCPU</Platforms>
+
+        <!-- Target RIDs -->
+        <RuntimeIdentifiers>
+            osx-arm64;osx-x64;
+            linux-x64;linux-arm64
+        </RuntimeIdentifiers>
+
+        <!-- Centralize build outputs -->
+        <BaseOutputPath>$(MSBuildThisFileDirectory)artifacts\bin\$(MSBuildProjectName)\</BaseOutputPath>
+        <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)artifacts\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+
+        <!-- Set deterministic builds -->
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+        <!-- Restore is reproducible: a lock file per project, checked in -->
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- Global references, analyzers -->
+        <PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <!-- Ruleset is off by default in .editorconfig; only RCS1141 is enabled -->
+        <PackageReference Include="Roslynator.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+</Project>

@@ -1,0 +1,39 @@
+# A Linux host to run `make publish` on, for a developer machine that cannot be
+# one. Native AOT links with the host's toolchain, so macOS cannot target Linux;
+# CI runs the same recipe on a Linux runner and never builds this image.
+#
+# The export stage writes the executables to the paths a host publish uses, so
+# what comes out is indistinguishable from what `make publish` leaves behind.
+#
+# run.sh supplies BUILD_IMAGE from global.json, where it is pinned by digest.
+ARG BUILD_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0-noble-aot
+
+FROM ${BUILD_IMAGE} AS build
+
+# The version that image ships is the version this wants; pinning it here would
+# only break when the pinned SDK image moves.
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+ARG RID
+RUN make publish RID="${RID}"
+
+FROM scratch AS export
+
+# The destinations below are relative on purpose: this stage is exported with
+# --output type=local, so they become the paths written under the repository.
+ARG RID
+ARG TFM
+# hadolint ignore=DL3045
+COPY --from=build \
+    /src/artifacts/bin/KnightOwl.GitHubTokenBroker.Service/Release/${TFM}/${RID}/publish/github-token-broker \
+    artifacts/bin/KnightOwl.GitHubTokenBroker.Service/Release/${TFM}/${RID}/publish/
+# hadolint ignore=DL3045
+COPY --from=build \
+    /src/artifacts/bin/KnightOwl.GitHubTokenBroker.Cli/Release/${TFM}/${RID}/publish/github-token \
+    artifacts/bin/KnightOwl.GitHubTokenBroker.Cli/Release/${TFM}/${RID}/publish/

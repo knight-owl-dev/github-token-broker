@@ -1,0 +1,23 @@
+# ShellCheck configuration
+# https://www.shellcheck.net/wiki/ShellCheckRC
+
+# Default shell dialect
+shell=bash
+
+# Report style-level findings, not only warnings
+severity=style
+
+# Follow source statements to check sourced files
+external-sources=true
+
+# Resolve a `source=` directive against the sourcing script's own directory, so
+# it does not depend on where the linter was invoked from
+source-path=SCRIPTDIR
+
+# Enable stricter optional checks
+enable=require-variable-braces
+enable=quote-safe-variables
+enable=check-unassigned-uppercase
+enable=check-extra-masked-returns
+enable=require-double-brackets
+enable=deprecate-which

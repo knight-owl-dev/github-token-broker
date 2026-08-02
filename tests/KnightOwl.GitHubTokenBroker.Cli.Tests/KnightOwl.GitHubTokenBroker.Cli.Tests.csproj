@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <RootNamespace>KnightOwl.GitHubTokenBroker.Cli.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../src/KnightOwl.GitHubTokenBroker.Cli/KnightOwl.GitHubTokenBroker.Cli.csproj"/>
+    </ItemGroup>
+
+</Project>
