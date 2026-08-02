@@ -58,6 +58,8 @@ if [[ "${#cases[@]}" -eq 0 ]]; then
   exit 1
 fi
 
+started="$(elapsed_mark)"
+
 passed=0
 failed=0
 skipped=0
@@ -90,16 +92,18 @@ done
 
 echo ""
 
+took="$(elapsed_since "${started}")"
+
 if [[ "${failed}" -eq 0 ]]; then
   summary="$(count "${passed}" case) passed"
   if [[ "${skipped}" -gt 0 ]]; then
     summary="${summary}, ${skipped} skipped"
   fi
 
-  report_ok "" "${summary}"
+  report_ok "" "${summary} in ${took}"
   exit 0
 fi
 
 total="$(count $((passed + failed + skipped)) case)"
-report_fail "" "${failed} of ${total} failed" "${failures[@]}"
+report_fail "" "${failed} of ${total} failed in ${took}" "${failures[@]}"
 exit 1

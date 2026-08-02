@@ -21,6 +21,10 @@ CASE_SKIPPED=3
 ASSERT_FAILURES=0
 ASSERT_TOTAL=0
 
+# Marked at source rather than at the first assertion, so fixture setup counts
+# towards the case: it is what a slow case usually spends its time on.
+ASSERT_STARTED="$(elapsed_mark)"
+
 # Output of the last run_capture.
 RUN_STATUS=0
 RUN_STDOUT=""
@@ -198,12 +202,18 @@ case_summary() {
   local total
   total="$(count "${ASSERT_TOTAL}" assertion)"
 
+  local took
+  took="$(elapsed_since "${ASSERT_STARTED}")"
+
   if [[ "${ASSERT_FAILURES}" -eq 0 ]]; then
-    printf '    %s%s passed%s\n' "${FORMAT_DIM}" "${total}" "${FORMAT_RESET}"
+    printf '    %s%s passed in %s%s\n' \
+      "${FORMAT_DIM}" "${total}" "${took}" "${FORMAT_RESET}"
+
     return 0
   fi
 
-  printf '    %s%d of %s failed%s\n' \
-    "${FORMAT_DIM}" "${ASSERT_FAILURES}" "${total}" "${FORMAT_RESET}"
+  printf '    %s%d of %s failed in %s%s\n' \
+    "${FORMAT_DIM}" "${ASSERT_FAILURES}" "${total}" "${took}" "${FORMAT_RESET}"
+
   return 1
 }

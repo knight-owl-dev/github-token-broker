@@ -190,6 +190,7 @@ if [[ -t 1 ]]; then
   DOCKER_RUN_FLAGS+=(--tty)
 fi
 
+IMAGES_STARTED="$(elapsed_mark)"
 FAILED=0
 FAILED_IMAGES=()
 
@@ -227,11 +228,12 @@ done
 
 echo ""
 TOTAL_IMAGES="$(count "${#IMAGES[@]}" image)"
+IMAGES_TOOK="$(elapsed_since "${IMAGES_STARTED}")"
 
 if [[ "${FAILED}" -eq 0 ]]; then
-  report_ok "" "${TOTAL_IMAGES} passed"
+  report_ok "" "${TOTAL_IMAGES} passed in ${IMAGES_TOOK}"
   exit 0
 fi
 
-report_fail "" "${#FAILED_IMAGES[@]} of ${TOTAL_IMAGES} failed" "${FAILED_IMAGES[@]}"
+report_fail "" "${#FAILED_IMAGES[@]} of ${TOTAL_IMAGES} failed in ${IMAGES_TOOK}" "${FAILED_IMAGES[@]}"
 exit 1

@@ -62,3 +62,22 @@ report_fail() {
       "${indent}" "${LABEL_INDENT}" "${FORMAT_DIM}" "${line}" "${FORMAT_RESET}"
   done
 }
+
+# elapsed_mark — an opaque mark to measure from, in microseconds.
+#
+# EPOCHREALTIME renders with the locale's decimal separator, so both are
+# stripped rather than assuming a point. Where the shell predates it, whole
+# seconds are the honest answer rather than a fabricated fraction.
+elapsed_mark() {
+  if [[ -n "${EPOCHREALTIME:-}" ]]; then
+    printf '%s' "${EPOCHREALTIME/[.,]/}"
+  else
+    printf '%s' "$((SECONDS * 1000000))"
+  fi
+}
+
+# elapsed_since MARK — how long since, as "5.2s".
+elapsed_since() {
+  local tenths=$((($(elapsed_mark) - $1) / 100000))
+  printf '%d.%ds' "$((tenths / 10))" "$((tenths % 10))"
+}
