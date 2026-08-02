@@ -8,12 +8,12 @@ using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Processes;
 using KnightOwl.GitHubTokenBroker.Domain.Repositories;
 
 
-const string usage = """
+const string usage = $"""
     usage:
-      github-token credential [get|store|erase]
-      github-token gh OWNER/REPOSITORY -- GH_ARGUMENT...
-      github-token check OWNER/REPOSITORY
-      github-token version
+      {Globals.AppName} credential [get|store|erase]
+      {Globals.AppName} gh OWNER/REPOSITORY -- GH_ARGUMENT...
+      {Globals.AppName} check OWNER/REPOSITORY
+      {Globals.AppName} version
     """;
 
 if (args.Length == 0)
@@ -30,13 +30,9 @@ if (args[0] == "version")
     return CliExitCode.Success;
 }
 
-if (!ClientOptions.TryRead(
-        Environment.GetEnvironmentVariable,
-        out var options,
-        out var optionsError
-    ))
+if (!ClientOptions.TryRead(Environment.GetEnvironmentVariable, out var options, out var optionsError))
 {
-    Console.Error.WriteLine($"github-token: {optionsError}");
+    Console.Error.WriteLine($"{Globals.AppName}: {optionsError}");
     return CliExitCode.Usage;
 }
 
@@ -52,12 +48,7 @@ switch (args[0])
             return CliExitCode.Usage;
         }
 
-        return await new CredentialHelper(
-                broker,
-                Console.In,
-                Console.Out,
-                Console.Error
-            )
+        return await new CredentialHelper(broker, Console.In, Console.Out, Console.Error)
             .RunAsync(args.Length == 2 ? args[1] : null, CancellationToken.None);
 
     case "check":
@@ -115,7 +106,7 @@ static bool TryParseRepository(
         return true;
     }
 
-    Console.Error.WriteLine($"github-token: {error}");
+    Console.Error.WriteLine($"{Globals.AppName}: {error}");
     return false;
 }
 

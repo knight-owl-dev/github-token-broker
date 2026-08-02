@@ -61,8 +61,7 @@ public sealed class InstallationTokenCache
 
         lock (entry.Gate)
         {
-            if (entry.Token is { } cached
-                && cached.IsFreshAt(_timeProvider.GetUtcNow(), _refreshMargin))
+            if (entry.Token is { } cached && cached.IsFreshAt(_timeProvider.GetUtcNow(), _refreshMargin))
             {
                 return cached;
             }

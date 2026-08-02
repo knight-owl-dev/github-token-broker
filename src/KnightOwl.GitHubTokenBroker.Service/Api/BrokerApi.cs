@@ -35,7 +35,7 @@ internal static class BrokerApi
         {
             ArgumentNullException.ThrowIfNull(app);
 
-            app.Use(async (context, next) =>
+            app.Use(static async (context, next) =>
                 {
                     if (context.Features.Get<TcpTransportMarker>() is null)
                     {
@@ -43,8 +43,7 @@ internal static class BrokerApi
                         return;
                     }
 
-                    var credential = context.RequestServices
-                        .GetService<ClientCredential>();
+                    var credential = context.RequestServices.GetService<ClientCredential>();
 
                     var presented = context.Request
                         .Headers[BrokerProtocol.ClientCredentialHeader]
@@ -72,8 +71,7 @@ internal static class BrokerApi
                 BrokerProtocol.HealthPath,
                 static context =>
                 {
-                    var allowlist = context.RequestServices
-                        .GetRequiredService<RepositoryAllowlist>();
+                    var allowlist = context.RequestServices.GetRequiredService<RepositoryAllowlist>();
 
                     return WriteJsonAsync(
                         context,
@@ -98,8 +96,7 @@ internal static class BrokerApi
                     }
 
                     var logger = Logger(context);
-                    var tokens = context.RequestServices
-                        .GetRequiredService<TokenIssuingService>();
+                    var tokens = context.RequestServices.GetRequiredService<TokenIssuingService>();
 
                     try
                     {
@@ -186,11 +183,10 @@ internal static class BrokerApi
         BrokerRepositoryRequest? request;
         try
         {
-            request = await context.Request
-                .ReadFromJsonAsync(
-                    BrokerV1JsonContext.Default.BrokerRepositoryRequest,
-                    context.RequestAborted
-                );
+            request = await context.Request.ReadFromJsonAsync(
+                BrokerV1JsonContext.Default.BrokerRepositoryRequest,
+                context.RequestAborted
+            );
         }
         catch (JsonException)
         {
@@ -204,8 +200,7 @@ internal static class BrokerApi
             return null;
         }
 
-        var validator = context.RequestServices
-            .GetRequiredService<RepositoryRequestValidator>();
+        var validator = context.RequestServices.GetRequiredService<RepositoryRequestValidator>();
 
         if (validator.TryResolve(request?.Host, request?.Repository, out var policy, out var error))
         {

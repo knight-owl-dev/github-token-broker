@@ -47,15 +47,14 @@ public sealed class AuthorizationCheck
 
         try
         {
-            var response = await _broker
-                .CheckAsync(repository, cancellationToken);
+            var response = await _broker.CheckAsync(repository, cancellationToken);
 
-            _output.WriteLine($"{response.Repository} {response.Permissions}");
+            await _output.WriteLineAsync($"{response.Repository} {response.Permissions}");
             return CliExitCode.Success;
         }
         catch (BrokerClientException exception)
         {
-            DiagnosticReport.Write(_error, "github-token", exception);
+            await DiagnosticReport.WriteAsync(_error, Globals.AppName, exception);
             return exception.Failure switch
             {
                 BrokerClientFailure.Unavailable => CliExitCode.Unavailable,

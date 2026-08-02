@@ -19,13 +19,13 @@ try
 }
 catch (BrokerUsageException exception)
 {
-    DiagnosticReport.Write(Console.Error, null, exception);
-    Console.Error.WriteLine("usage: github-token-broker --config ABSOLUTE_CONFIG_PATH");
+    await DiagnosticReport.WriteAsync(Console.Error, null, exception);
+    await Console.Error.WriteLineAsync($"usage: {Globals.AppName} --config ABSOLUTE_CONFIG_PATH");
     return BrokerExitCode.Usage;
 }
 catch (ConfigurationException exception)
 {
-    DiagnosticReport.Write(Console.Error, "configuration error", exception);
+    await DiagnosticReport.WriteAsync(Console.Error, "configuration error", exception);
     return BrokerExitCode.Configuration;
 }
 
@@ -78,7 +78,7 @@ try
 }
 catch (ConfigurationException exception)
 {
-    DiagnosticReport.Write(Console.Error, "configuration error", exception);
+    await DiagnosticReport.WriteAsync(Console.Error, "configuration error", exception);
     return BrokerExitCode.Configuration;
 }
 
@@ -91,7 +91,7 @@ try
 }
 catch (ConfigurationException exception)
 {
-    DiagnosticReport.Write(Console.Error, "configuration error", exception);
+    await DiagnosticReport.WriteAsync(Console.Error, "configuration error", exception);
     return BrokerExitCode.Configuration;
 }
 
@@ -205,6 +205,6 @@ static HttpClient CreateGitHubClient(BrokerConfiguration configuration)
     };
 
     // GitHub requires a User-Agent.
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("github-token-broker");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(Globals.AppName);
     return client;
 }

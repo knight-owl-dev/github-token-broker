@@ -37,12 +37,7 @@ public sealed class CredentialHelper
     /// <param name="input">Where Git writes the credential description.</param>
     /// <param name="output">Where the credential is written.</param>
     /// <param name="error">Where diagnostics are written.</param>
-    public CredentialHelper(
-        IBrokerClient broker,
-        TextReader input,
-        TextWriter output,
-        TextWriter error
-    )
+    public CredentialHelper(IBrokerClient broker, TextReader input, TextWriter output, TextWriter error)
     {
         ArgumentNullException.ThrowIfNull(broker);
         ArgumentNullException.ThrowIfNull(input);
@@ -69,7 +64,7 @@ public sealed class CredentialHelper
         }
         catch (InvalidDataException exception)
         {
-            DiagnosticReport.Write(_error, "github-token", exception);
+            await DiagnosticReport.WriteAsync(_error, Globals.AppName, exception);
             return CliExitCode.Usage;
         }
 
@@ -89,7 +84,7 @@ public sealed class CredentialHelper
 
         if (resolution == GitCredentialResolution.Unusable)
         {
-            _error.WriteLine($"github-token: {resolveError}");
+            await _error.WriteLineAsync($"{Globals.AppName}: {resolveError}");
             return CliExitCode.Success;
         }
 
@@ -102,8 +97,7 @@ public sealed class CredentialHelper
 
         try
         {
-            var token = await _broker
-                .RequestTokenAsync(repository, cancellationToken);
+            var token = await _broker.RequestTokenAsync(repository, cancellationToken);
 
             GitCredentialProtocol.WriteCredential(_output, token.Token);
             return CliExitCode.Success;
@@ -118,12 +112,12 @@ public sealed class CredentialHelper
         {
             // Nothing has reached Git yet, so failing is cleaner than handing it a
             // partial credential.
-            DiagnosticReport.Write(_error, "github-token", exception);
+            await DiagnosticReport.WriteAsync(_error, Globals.AppName, exception);
             return CliExitCode.Internal;
         }
         catch (BrokerClientException exception)
         {
-            DiagnosticReport.Write(_error, "github-token", exception);
+            await DiagnosticReport.WriteAsync(_error, Globals.AppName, exception);
             return exception.Failure switch
             {
                 BrokerClientFailure.Unavailable => CliExitCode.Unavailable,

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Mime;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using KnightOwl.GitHubTokenBroker.Cli.Application.Ports;
 using KnightOwl.GitHubTokenBroker.Domain.Access;
@@ -75,21 +76,20 @@ public sealed class HttpBrokerClient : IBrokerClient, IDisposable
     {
         ArgumentNullException.ThrowIfNull(repository);
 
-        using HttpRequestMessage request = new(HttpMethod.Post, path)
-        {
-            Content = new StringContent(
-                System.Text.Json.JsonSerializer.Serialize(
-                    new BrokerRepositoryRequest
-                    {
-                        Host = GitHubHost.GitHubComName,
-                        Repository = repository.FullName,
-                    },
-                    BrokerV1JsonContext.Default.BrokerRepositoryRequest
-                ),
-                Encoding.UTF8,
-                MediaTypeNames.Application.Json
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(
+                new BrokerRepositoryRequest
+                {
+                    Host = GitHubHost.GitHubComName,
+                    Repository = repository.FullName,
+                },
+                BrokerV1JsonContext.Default.BrokerRepositoryRequest
             ),
-        };
+            Encoding.UTF8,
+            MediaTypeNames.Application.Json
+        );
 
         if (_clientCredential is not null)
         {
@@ -99,11 +99,9 @@ public sealed class HttpBrokerClient : IBrokerClient, IDisposable
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient
-                .SendAsync(request, cancellationToken);
+            response = await _httpClient.SendAsync(request, cancellationToken);
         }
-        catch (TaskCanceledException exception)
-            when (!cancellationToken.IsCancellationRequested)
+        catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             throw new BrokerClientException(
                 BrokerClientFailure.Unavailable,
@@ -122,45 +120,40 @@ public sealed class HttpBrokerClient : IBrokerClient, IDisposable
 
         using (response)
         {
-            if (response.StatusCode == HttpStatusCode.Forbidden)
+            var failure = response.StatusCode switch
             {
-                throw new BrokerClientException(
+                HttpStatusCode.Forbidden => new BrokerClientException(
                     BrokerClientFailure.Refused,
                     $"The broker does not serve {repository.FullName}."
-                );
-            }
-
-            if (response.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                throw new BrokerClientException(
+                ),
+                HttpStatusCode.Unauthorized => new BrokerClientException(
                     BrokerClientFailure.Unauthenticated,
                     "The broker rejected the client credential."
-                );
-            }
-
-            if (response.StatusCode == HttpStatusCode.Conflict)
-            {
-                throw new BrokerClientException(
+                ),
+                HttpStatusCode.Conflict => new BrokerClientException(
                     BrokerClientFailure.Misconfigured,
-                    $"The broker cannot mint for {repository.FullName}: it is allowlisted, but the GitHub App installation does not grant it. Check the installation's repository access."
-                );
-            }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new BrokerClientException(
+                    $"The broker cannot mint for {repository.FullName}: it is allowlisted, "
+                    + "but the GitHub App installation does not grant it. "
+                    + "Check the installation's repository access."
+                ),
+                _ when !response.IsSuccessStatusCode => new BrokerClientException(
                     BrokerClientFailure.Failed,
                     $"The broker returned status {(int) response.StatusCode}. See the broker log."
-                );
+                ),
+                _ => null,
+            };
+
+            if (failure is not null)
+            {
+                throw failure;
             }
 
             TResponse? body;
             try
             {
-                body = await response.Content
-                    .ReadFromJsonAsync(typeInfo, cancellationToken);
+                body = await response.Content.ReadFromJsonAsync(typeInfo, cancellationToken);
             }
-            catch (System.Text.Json.JsonException exception)
+            catch (JsonException exception)
             {
                 throw new BrokerClientException(
                     BrokerClientFailure.Failed,

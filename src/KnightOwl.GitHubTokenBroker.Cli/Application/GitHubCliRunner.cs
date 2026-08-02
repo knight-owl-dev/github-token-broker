@@ -88,19 +88,18 @@ public sealed class GitHubCliRunner
                 out var locateError
             ))
         {
-            _error.WriteLine($"github-token: {locateError}");
+            await _error.WriteLineAsync($"{Globals.AppName}: {locateError}");
             return CliExitCode.Usage;
         }
 
         BrokerTokenResponse token;
         try
         {
-            token = await _broker
-                .RequestTokenAsync(repository, cancellationToken);
+            token = await _broker.RequestTokenAsync(repository, cancellationToken);
         }
         catch (BrokerClientException exception)
         {
-            DiagnosticReport.Write(_error, "github-token", exception);
+            await DiagnosticReport.WriteAsync(_error, Globals.AppName, exception);
             return exception.Failure switch
             {
                 BrokerClientFailure.Unavailable => CliExitCode.Unavailable,
