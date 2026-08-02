@@ -1,5 +1,4 @@
 using KnightOwl.GitHubTokenBroker.Cli.Infrastructure;
-using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 
 
 namespace KnightOwl.GitHubTokenBroker.Cli.Tests;

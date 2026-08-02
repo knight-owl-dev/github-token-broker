@@ -22,10 +22,11 @@ installation tokens, and a client that supplies them to Git and the GitHub CLI.
   Anything `make lint` invokes has to exist in `ghcr.io/knight-owl-dev/ci-tools`,
   or it passes here and fails in CI.
 - A message a person reads is a sentence: capitalized, ending in a period, and
-  worded so a literal config key or path never starts one. A string composed into
-  another message stays a lowercase fragment with no terminal period — the
-  `out string? error` of a domain `Try*` method, and anything passed to a
-  `LoggerMessage` template.
+  worded so a literal config key or path never starts one. **Every exception
+  message is one**, whoever ends up reading it — a thrower does not get to assume
+  its consumer. A string composed into another message stays a lowercase fragment
+  with no terminal period — the `out string? error` of a domain `Try*` method, and
+  a value passed as a `LoggerMessage` argument.
 - A wrapped exception keeps its own wording; `DiagnosticReport` prints the chain
   rather than splicing an inner message into ours.
 - The man pages own the reference material — commands, settings, exit statuses.
@@ -36,7 +37,7 @@ installation tokens, and a client that supplies them to Git and the GitHub CLI.
   extend it only where their behavior differs.
 - A breaking wire change adds `Infrastructure.Contracts.V2` alongside `V1`, which
   keeps working for one release, then goes. `BrokerProtocol` holds what outlives
-  any version: `/health`, the credential header, the request limit.
+  any version: `/health` and the request limit.
 - **Confirm an assertion can fail before believing it.** A false pass is
   indistinguishable from a real one, so the shapes that produce them are ruled out
   by construction: a case that cannot run reports `[SKIP]` and exits 3 rather than

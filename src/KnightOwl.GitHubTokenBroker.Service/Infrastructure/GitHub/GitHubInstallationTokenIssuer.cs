@@ -82,7 +82,7 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
             // with nothing in the log naming the key.
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.PrivateKeyUnusable,
-                "the private key could not be loaded for this mint",
+                "The private key could not be loaded for this mint.",
                 exception
             );
         }
@@ -119,15 +119,13 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient
-                .SendAsync(request, cancellationToken);
+            response = await _httpClient.SendAsync(request, cancellationToken);
         }
-        catch (TaskCanceledException exception)
-            when (!cancellationToken.IsCancellationRequested)
+        catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.Unavailable,
-                "the GitHub token request timed out",
+                "The GitHub token request timed out.",
                 exception
             );
         }
@@ -135,7 +133,7 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         {
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.Unavailable,
-                "the GitHub token request could not be completed",
+                "The GitHub token request could not be completed.",
                 exception
             );
         }
@@ -144,23 +142,22 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         {
             if (response.StatusCode != HttpStatusCode.Created)
             {
-                throw Classify(response.StatusCode, jwt.KeyId);
+                throw Classify(response, jwt.KeyId);
             }
 
             InstallationTokenResponse? body;
             try
             {
-                body = await response.Content
-                    .ReadFromJsonAsync(
-                        GitHubJsonContext.Default.InstallationTokenResponse,
-                        cancellationToken
-                    );
+                body = await response.Content.ReadFromJsonAsync(
+                    GitHubJsonContext.Default.InstallationTokenResponse,
+                    cancellationToken
+                );
             }
             catch (JsonException exception)
             {
                 throw new TokenIssuanceException(
                     TokenIssuanceFailure.UntrustworthyResponse,
-                    "the GitHub token response was not valid JSON",
+                    "The GitHub token response was not valid JSON.",
                     exception
                 );
             }
@@ -169,7 +166,7 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
             {
                 throw new TokenIssuanceException(
                     TokenIssuanceFailure.UntrustworthyResponse,
-                    "the GitHub token response was empty"
+                    "The GitHub token response was empty."
                 );
             }
 
@@ -182,33 +179,54 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
     /// they decide whether the broker discards what it holds and what an operator
     /// is told to check.
     /// </summary>
-    /// <param name="status">The status GitHub returned.</param>
+    /// <param name="response">The response GitHub returned.</param>
     /// <param name="keyId">Identifier of the key that signed the attempt.</param>
     /// <returns>The classified failure, ready to throw.</returns>
-    private TokenIssuanceException Classify(HttpStatusCode status, string keyId)
-        => status switch
+    private TokenIssuanceException Classify(HttpResponseMessage response, string keyId)
+        => response.StatusCode switch
         {
             HttpStatusCode.Unauthorized => new TokenIssuanceException(
                 TokenIssuanceFailure.AppUnauthorized,
-                $"GitHub rejected the App JWT signed by key {keyId}; check the private key and host clock"
+                $"GitHub rejected the App JWT signed by key {keyId}; check the private key and host clock."
+            ),
+
+            // GitHub spends 403 on both a suspended installation and a secondary
+            // rate limit. Only the headers separate them, and calling a rate limit
+            // suspended sends an operator to check an installation that is fine.
+            HttpStatusCode.Forbidden when IsRateLimited(response) => new TokenIssuanceException(
+                TokenIssuanceFailure.Unavailable,
+                "GitHub is rate limiting this App; the request is retryable."
             ),
             HttpStatusCode.Forbidden => new TokenIssuanceException(
                 TokenIssuanceFailure.InstallationForbidden,
-                $"GitHub refused installation {_installationId}; it may be suspended"
+                $"GitHub refused installation {_installationId}; it may be suspended."
             ),
             HttpStatusCode.NotFound => new TokenIssuanceException(
                 TokenIssuanceFailure.InstallationOrRepositoryMissing,
-                $"GitHub does not recognize installation {_installationId} or the requested repository"
+                $"GitHub does not recognize installation {_installationId} or the requested repository."
             ),
             HttpStatusCode.UnprocessableContent => new TokenIssuanceException(
                 TokenIssuanceFailure.PermissionDrift,
-                "GitHub refused the requested permissions; broker configuration asks for more than the App registration grants"
+                "GitHub refused the requested permissions; broker configuration asks for more than the App registration grants."
             ),
             _ => new TokenIssuanceException(
                 TokenIssuanceFailure.Unavailable,
-                $"GitHub returned an unexpected status {(int) status}"
+                $"GitHub returned an unexpected status {(int) response.StatusCode}."
             ),
         };
+
+    /// <summary>Reports whether a refusal is a rate limit rather than a decision.</summary>
+    /// <param name="response">The refusing response.</param>
+    /// <returns><see langword="true"/> when GitHub signaled a limit.</returns>
+    /// <remarks>
+    /// Either header alone is enough: a primary limit spends the budget and says
+    /// so through <c>x-ratelimit-remaining</c>, a secondary one answers
+    /// <c>retry-after</c> without touching the budget.
+    /// </remarks>
+    private static bool IsRateLimited(HttpResponseMessage response)
+        => response.Headers.RetryAfter is not null
+            || (response.Headers.TryGetValues("x-ratelimit-remaining", out var remaining)
+                && remaining.FirstOrDefault() == "0");
 
     /// <summary>
     /// Confirms the grant is what was asked for before any caller sees the token.
@@ -235,19 +253,15 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         {
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.UntrustworthyResponse,
-                $"the GitHub token response was unusable: {tokenError}"
+                $"The GitHub token response was unusable: {tokenError}."
             );
         }
 
-        if (!string.Equals(
-                body.RepositorySelection,
-                RepositorySelectionSelected,
-                StringComparison.Ordinal
-            ))
+        if (!string.Equals(body.RepositorySelection, RepositorySelectionSelected, StringComparison.Ordinal))
         {
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.UntrustworthyResponse,
-                $"GitHub reported repository_selection \"{body.RepositorySelection}\" rather than \"{RepositorySelectionSelected}\""
+                $"GitHub reported repository_selection \"{body.RepositorySelection}\" rather than \"{RepositorySelectionSelected}\"."
             );
         }
 
@@ -256,19 +270,15 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         {
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.UntrustworthyResponse,
-                $"GitHub granted {repositories.Count} repositories for a single-repository request"
+                $"GitHub granted {repositories.Count} repositories for a single-repository request."
             );
         }
 
-        if (!string.Equals(
-                repositories[0].FullName,
-                policy.Repository.FullName,
-                StringComparison.OrdinalIgnoreCase
-            ))
+        if (!string.Equals(repositories[0].FullName, policy.Repository.FullName, StringComparison.OrdinalIgnoreCase))
         {
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.UntrustworthyResponse,
-                $"GitHub granted a different repository than {policy.Repository.FullName}"
+                $"GitHub granted a different repository than {policy.Repository.FullName}."
             );
         }
 
@@ -285,27 +295,24 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         return token;
     }
 
-    private static void ValidatePermissions(
-        Dictionary<string, string>? granted,
-        RepositoryAccessPolicy policy
-    )
+    private static void ValidatePermissions(Dictionary<string, string>? granted, RepositoryAccessPolicy policy)
     {
         if (granted is null)
         {
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.UntrustworthyResponse,
-                "GitHub did not report the granted permissions"
+                "GitHub did not report the granted permissions."
             );
         }
 
         Dictionary<string, PermissionLevel> parsed = new(StringComparer.Ordinal);
-        foreach ((var name, var level) in granted)
+        foreach (var (name, level) in granted)
         {
             if (!PermissionVocabulary.TryParseLevel(level, out var parsedLevel))
             {
                 throw new TokenIssuanceException(
                     TokenIssuanceFailure.UntrustworthyResponse,
-                    $"GitHub granted permission \"{name}\" at unrecognized level \"{level}\""
+                    $"GitHub granted permission \"{name}\" at unrecognized level \"{level}\"."
                 );
             }
 
@@ -316,7 +323,7 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         {
             throw new TokenIssuanceException(
                 TokenIssuanceFailure.UntrustworthyResponse,
-                $"the granted token exceeds its configured ceiling: {excess}"
+                $"The granted token exceeds its configured ceiling: {excess}."
             );
         }
     }

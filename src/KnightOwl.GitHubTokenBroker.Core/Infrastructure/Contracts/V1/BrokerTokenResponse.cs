@@ -12,4 +12,12 @@ public sealed record BrokerTokenResponse
 
     /// <summary>When the token stops working, as reported by GitHub.</summary>
     public required DateTimeOffset ExpiresAt { get; init; }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The record's own would print the token, and one interpolation is all it
+    /// would take.
+    /// </remarks>
+    public override string ToString()
+        => $"{nameof(BrokerTokenResponse)} {{ ExpiresAt = {this.ExpiresAt:O} }}";
 }

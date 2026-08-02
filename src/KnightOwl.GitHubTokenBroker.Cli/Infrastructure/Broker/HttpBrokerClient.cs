@@ -7,7 +7,6 @@ using System.Text.Json.Serialization.Metadata;
 using KnightOwl.GitHubTokenBroker.Cli.Application.Ports;
 using KnightOwl.GitHubTokenBroker.Domain.Access;
 using KnightOwl.GitHubTokenBroker.Domain.Repositories;
-using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts.V1;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 
@@ -15,12 +14,11 @@ using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 namespace KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 
 /// <summary>
-/// Talks to the broker over HTTP, whether that HTTP rides a Unix socket or TCP.
+/// Talks to the broker over HTTP carried on a Unix socket.
 /// </summary>
 /// <remarks>
-/// The transport difference lives entirely in the supplied <see cref="HttpClient"/>,
-/// so request handling, error classification, and everything above are identical on
-/// both. See <see cref="BrokerHttpClientFactory"/>.
+/// The transport lives entirely in the supplied <see cref="HttpClient"/>; see
+/// <see cref="BrokerHttpClientFactory"/>.
 /// </remarks>
 public sealed class HttpBrokerClient : IBrokerClient, IDisposable
 {

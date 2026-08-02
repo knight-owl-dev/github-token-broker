@@ -1,6 +1,7 @@
 using KnightOwl.GitHubTokenBroker.Cli.Application.Ports;
 using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Processes;
+using KnightOwl.GitHubTokenBroker.Domain.Access;
 using KnightOwl.GitHubTokenBroker.Domain.Repositories;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts.V1;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Diagnostics;
@@ -21,11 +22,15 @@ public sealed class GitHubCliRunner
     /// <summary>Where the GitHub CLI reads a token from the environment.</summary>
     private const string GhTokenVariable = "GH_TOKEN";
 
-    /// <summary>An older token variable, removed so it cannot take precedence.</summary>
-    private const string GitHubTokenVariable = "GITHUB_TOKEN";
-
     /// <summary>Pins the child to the repository the token is scoped to.</summary>
     private const string GhRepositoryVariable = "GH_REPO";
+
+    /// <summary>Pins where the token is sent, which is the host it was minted for.</summary>
+    private const string GhHostVariable = "GH_HOST";
+
+    /// <summary>Token variables removed from the child so none can take precedence.</summary>
+    private static readonly string[] DisplacedTokenVariables =
+        ["GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
 
     private readonly IBrokerClient _broker;
     private readonly IProcessLauncher _launcher;
@@ -103,15 +108,20 @@ public sealed class GitHubCliRunner
             return exception.Failure.ExitCode;
         }
 
-        return _launcher.Run(
-            executablePath,
-            arguments,
-            new Dictionary<string, string?>(StringComparer.Ordinal)
-            {
-                [GhTokenVariable] = token.Token,
-                [GitHubTokenVariable] = null,
-                [GhRepositoryVariable] = repository.FullName,
-            }
-        );
+        Dictionary<string, string?> environment = new(StringComparer.Ordinal)
+        {
+            [GhTokenVariable] = token.Token,
+            [GhRepositoryVariable] = repository.FullName,
+
+            // An inherited value would send the token to another host.
+            [GhHostVariable] = GitHubHost.GitHubComName,
+        };
+
+        foreach (var displaced in DisplacedTokenVariables)
+        {
+            environment[displaced] = null;
+        }
+
+        return _launcher.Run(executablePath, arguments, environment);
     }
 }

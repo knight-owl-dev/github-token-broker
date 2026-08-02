@@ -199,9 +199,10 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     {
         const UnixFileMode group = SocketMode | UnixFileMode.GroupRead | UnixFileMode.GroupWrite;
 
-        _app!.NarrowUnixSocket(new UnixSocketOptions(_socketPath, group));
+        var applied = BrokerListeners.NarrowUnixSocket(new UnixSocketOptions(_socketPath, group));
 
         Assert.Equal(group, File.GetUnixFileMode(_socketPath));
+        Assert.Equal("0660", applied);
     }
 
     [Fact]
@@ -213,7 +214,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
         var absent = Path.Combine(_root, "absent.sock");
 
         var failure = Assert.Throws<UnixSocketModeException>(
-            () => _app!.NarrowUnixSocket(new UnixSocketOptions(absent, SocketMode))
+            () => BrokerListeners.NarrowUnixSocket(new UnixSocketOptions(absent, SocketMode))
         );
 
         Assert.Contains(absent, failure.Message, StringComparison.Ordinal);

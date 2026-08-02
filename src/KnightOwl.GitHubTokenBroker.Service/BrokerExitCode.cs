@@ -30,6 +30,13 @@ public static class BrokerExitCode
     /// </remarks>
     public const int SocketMode = 71;
 
+    /// <summary>Startup failed for a reason the broker does not classify.</summary>
+    /// <remarks>
+    /// Every other status names something to go and fix; this one only says the
+    /// broker did not get far enough to know.
+    /// </remarks>
+    public const int Internal = 70;
+
     /// <summary>Configuration was missing or invalid, including a listener that could not bind.</summary>
     public const int Configuration = 78;
 }

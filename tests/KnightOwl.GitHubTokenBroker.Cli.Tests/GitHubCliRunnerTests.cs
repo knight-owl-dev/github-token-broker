@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using KnightOwl.GitHubTokenBroker.Cli.Application;
 using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 using KnightOwl.GitHubTokenBroker.Cli.Tests.Doubles;
@@ -6,6 +7,10 @@ using KnightOwl.GitHubTokenBroker.Domain.Repositories;
 
 namespace KnightOwl.GitHubTokenBroker.Cli.Tests;
 
+// The executable bit is what the locator selects on, and it has no Windows
+// meaning. The attribute says so where a runtime guard would leave the
+// assertions silently skipped.
+[UnsupportedOSPlatform("windows")]
 public sealed class GitHubCliRunnerTests : IDisposable
 {
     private const string Token = "ghs_opaqueTokenValue";
@@ -15,8 +20,7 @@ public sealed class GitHubCliRunnerTests : IDisposable
 
     public GitHubCliRunnerTests()
     {
-        _ghPath = Path.Combine(_root, "gh");
-        File.WriteAllText(_ghPath, "#!/bin/sh\nexit 0\n");
+        _ghPath = TestExecutable.Create(Path.Combine(_root, "gh"));
     }
 
     public void Dispose()

@@ -39,6 +39,12 @@ public static class GitHubCliLocator
                 return false;
             }
 
+            if (!IsExecutable(configuredPath))
+            {
+                error = $"The configured GitHub CLI \"{configuredPath}\" is not executable.";
+                return false;
+            }
+
             executablePath = Path.GetFullPath(configuredPath);
             error = null;
             return true;
@@ -62,7 +68,7 @@ public static class GitHubCliLocator
                 continue;
             }
 
-            if (!File.Exists(candidate))
+            if (!File.Exists(candidate) || !IsExecutable(candidate))
             {
                 continue;
             }
@@ -83,6 +89,28 @@ public static class GitHubCliLocator
 
         error = $"No GitHub CLI named \"{ExecutableName}\" was found on PATH.";
         return false;
+    }
+
+    /// <summary>Reports whether a file can be executed by anyone.</summary>
+    /// <param name="path">An existing file.</param>
+    /// <returns><see langword="true"/> when an execute bit is set.</returns>
+    /// <remarks>
+    /// Launching a file without one throws from the runtime rather than returning
+    /// a status, and by then a token has been minted. Which bit applies needs the
+    /// owner and groups, so any of the three makes a candidate and the launch
+    /// settles it.
+    /// </remarks>
+    private static bool IsExecutable(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        var mode = File.GetUnixFileMode(path);
+        return mode.HasFlag(UnixFileMode.UserExecute)
+            || mode.HasFlag(UnixFileMode.GroupExecute)
+            || mode.HasFlag(UnixFileMode.OtherExecute);
     }
 
     /// <summary>Resolves a path to what it finally points at.</summary>

@@ -1,8 +1,14 @@
+using System.Runtime.Versioning;
 using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Processes;
+using KnightOwl.GitHubTokenBroker.Cli.Tests.Doubles;
 
 
 namespace KnightOwl.GitHubTokenBroker.Cli.Tests;
 
+// The executable bit is what the locator selects on, and it has no Windows
+// meaning. The attribute says so where a runtime guard would leave the
+// assertions silently skipped.
+[UnsupportedOSPlatform("windows")]
 public sealed class GitHubCliLocatorTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("hga-locate").FullName;
@@ -11,12 +17,51 @@ public sealed class GitHubCliLocatorTests : IDisposable
         => Directory.Delete(_root, recursive: true);
 
     private string CreateExecutable(string directory, string name)
+        => TestExecutable.Create(Path.Combine(_root, directory, name));
+
+    private string CreateWithoutExecuteBit(string directory, string name)
+        => TestExecutable.CreateWithoutExecuteBit(Path.Combine(_root, directory, name));
+
+    /// <remarks>
+    /// Paired so the skip is the missing execute bit rather than the candidate
+    /// never being reachable: the same directory holds both, and the executable
+    /// one is found.
+    /// </remarks>
+    [Fact]
+    public void SkipsACandidateItCouldNotExecute()
     {
-        var directoryPath = Path.Combine(_root, directory);
-        Directory.CreateDirectory(directoryPath);
-        var path = Path.Combine(directoryPath, name);
-        File.WriteAllText(path, "#!/bin/sh\n");
-        return path;
+        CreateWithoutExecuteBit("bin", "gh");
+        var usable = CreateExecutable("later", "gh");
+
+        Assert.True(
+            GitHubCliLocator.TryLocate(
+                configuredPath: null,
+                $"{Path.Combine(_root, "bin")}{Path.PathSeparator}{Path.Combine(_root, "later")}",
+                ownExecutablePath: null,
+                out var located,
+                out _
+            )
+        );
+
+        Assert.Equal(usable, located);
+    }
+
+    [Fact]
+    public void RefusesAConfiguredPathItCouldNotExecute()
+    {
+        var configured = CreateWithoutExecuteBit("explicit", "gh");
+
+        Assert.False(
+            GitHubCliLocator.TryLocate(
+                configured,
+                searchPath: null,
+                ownExecutablePath: null,
+                out _,
+                out var error
+            )
+        );
+
+        Assert.Contains("not executable", error, StringComparison.Ordinal);
     }
 
     [Fact]

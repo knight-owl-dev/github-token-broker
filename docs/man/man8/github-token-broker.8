@@ -151,8 +151,7 @@ What follows is what the broker does with them at startup.
 .\"
 .Ss The socket directory
 Traversal of the directory holding the socket is the outer half of the socket's
-authorization, and it also covers the moment between binding and the mode being
-applied to the socket itself.
+authorization.
 .Pp
 When the directory does not exist, the broker creates it
 .Ql 0700 .
@@ -167,8 +166,24 @@ The sticky bit is what makes a shared directory such as
 safe: everyone may create, only the owner may unlink.
 Traversal for a group stays available through
 .Ql 0750 .
+.Pp
+Only the mode is checked, never the owner.
+A directory another account owns at
+.Ql 0755
+passes, and that account can unlink the socket and bind its own in its place.
+Give the socket a directory the broker's own account owns; under systemd that is
+.Ql RuntimeDirectory= .
 .\"
 .Ss The socket mode
+Binding creates the socket file, and the broker chmods it a moment later, so in
+between its mode comes from the umask.
+The broker narrows the umask across that moment, so the socket is created
+owner-only and every widening after it is one the configuration asked for.
+An inherited
+.Ql 002
+would otherwise leave it group-writable, which on a socket is the right to
+connect.
+.Pp
 The mode is applied by the broker rather than left to the process umask.
 Connecting needs write permission on the socket file, so a umask would decide
 who may mint.
@@ -255,6 +270,10 @@ Shut down normally.
 The command line was wrong.
 .It Sy 66
 The private key could not be read or parsed.
+.It Sy 70
+Startup failed for a reason the broker does not classify.
+The message names what threw; the other statuses are the ones an operator acts
+on directly.
 .It Sy 71
 The socket was bound but its mode could not be applied.
 .It Sy 78

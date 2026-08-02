@@ -80,6 +80,26 @@ public sealed class UnixSocketPreparationTests : IDisposable
         Assert.Equal("important", File.ReadAllText(target));
     }
 
+    /// <remarks>
+    /// A link to nothing reads as a free path under POSIX, where stat follows it.
+    /// .NET falls back to lstat and reports the entry, so the check above catches
+    /// this too. Pinned because that is a framework behavior rather than one this
+    /// code arranges. The message is asserted, since refusal as an occupied path
+    /// would pass without naming the link.
+    /// </remarks>
+    [Fact]
+    public void RefusesASymbolicLinkPointingAtNothing()
+    {
+        var link = Path("dangling.sock");
+        File.CreateSymbolicLink(link, Path("absent"));
+
+        var failure = Assert.Throws<ConfigurationException>(
+            () => UnixSocketPreparation.Prepare(link)
+        );
+
+        Assert.Contains("symbolic link", failure.Message, StringComparison.Ordinal);
+    }
+
     /// <param name="contents">What the file at the socket path holds.</param>
     /// <remarks>
     /// The empty case is the one a length heuristic would have misread as a

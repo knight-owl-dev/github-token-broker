@@ -27,11 +27,33 @@ public static class DiagnosticReport
         var buff = new StringBuilder();
         buff.AppendLine(label is null ? exception.Message : $"{label}: {exception.Message}");
 
-        for (var inner = exception.InnerException; inner is not null; inner = inner.InnerException)
+        foreach (var inner in Wrapped(exception))
         {
-            buff.AppendLine($"{Indent}{inner.Message}");
+            buff.AppendLine($"{Indent}{inner}");
         }
 
         await error.WriteAsync(buff.ToString());
+    }
+
+    /// <summary>Renders an exception and everything it wraps on one line.</summary>
+    /// <param name="exception">The failure to describe.</param>
+    /// <returns>The chain, outermost first.</returns>
+    /// <remarks>
+    /// For a log, where the indented form above would span records. Joined with a
+    /// space, since each message is its own sentence.
+    /// </remarks>
+    public static string Describe(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        return string.Join(' ', new[] { exception.Message }.Concat(Wrapped(exception)));
+    }
+
+    private static IEnumerable<string> Wrapped(Exception exception)
+    {
+        for (var inner = exception.InnerException; inner is not null; inner = inner.InnerException)
+        {
+            yield return inner.Message;
+        }
     }
 }

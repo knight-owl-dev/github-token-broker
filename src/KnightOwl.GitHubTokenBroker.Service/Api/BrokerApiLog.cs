@@ -11,13 +11,6 @@ namespace KnightOwl.GitHubTokenBroker.Service.Api;
 internal static partial class BrokerApiLog
 {
     [LoggerMessage(
-        EventId = 1000,
-        Level = LogLevel.Warning,
-        Message = "Rejected a TCP request without a valid client credential"
-    )]
-    public static partial void CredentialRejected(ILogger logger);
-
-    [LoggerMessage(
         EventId = 1001,
         Level = LogLevel.Warning,
         Message = "Refused a repository request: {Reason}"

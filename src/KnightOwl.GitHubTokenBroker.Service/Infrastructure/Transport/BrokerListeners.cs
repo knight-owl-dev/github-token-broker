@@ -5,8 +5,12 @@ using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 namespace KnightOwl.GitHubTokenBroker.Service.Infrastructure.Transport;
 
 /// <summary>
-/// Where the broker listens, and what the socket needs once it does.
+/// What configured transport needs to bind, and to be usable once it has.
 /// </summary>
+/// <remarks>
+/// Mechanics only. When each step runs, and what its failure costs the process,
+/// belongs to the host that orders them.
+/// </remarks>
 internal static class BrokerListeners
 {
     /// <param name="webHost">The host to add the listeners to.</param>
@@ -34,43 +38,35 @@ internal static class BrokerListeners
         }
     }
 
-    /// <param name="app">The application whose socket is being narrowed.</param>
-    extension(WebApplication app)
+    /// <summary>Gives a bound socket its configured mode.</summary>
+    /// <param name="socket">The configured socket.</param>
+    /// <returns>The mode applied, as the octal an operator wrote.</returns>
+    /// <exception cref="UnixSocketModeException">The mode could not be applied.</exception>
+    /// <remarks>
+    /// Binding creates the socket file, so this only works once the host has
+    /// started.
+    /// </remarks>
+    public static string NarrowUnixSocket(UnixSocketOptions socket)
     {
-        /// <summary>Gives the socket its configured mode.</summary>
-        /// <param name="socket">The configured socket, or <see langword="null"/> for none.</param>
-        /// <exception cref="UnixSocketModeException">The mode could not be applied.</exception>
-        /// <remarks>
-        /// Binding creates the socket file, so this belongs after the host has
-        /// started rather than alongside <see cref="UseBrokerListeners"/>.
-        /// </remarks>
-        public void NarrowUnixSocket(UnixSocketOptions? socket)
+        ArgumentNullException.ThrowIfNull(socket);
+
+        var socketMode = UnixSocketPreparation.Format(socket.Mode);
+
+        try
         {
-            ArgumentNullException.ThrowIfNull(app);
-
-            if (socket is null)
+            if (!OperatingSystem.IsWindows())
             {
-                return;
+                File.SetUnixFileMode(socket.Path, socket.Mode);
             }
-
-            var socketMode = UnixSocketPreparation.Format(socket.Mode);
-
-            try
-            {
-                if (!OperatingSystem.IsWindows())
-                {
-                    File.SetUnixFileMode(socket.Path, socket.Mode);
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                throw new UnixSocketModeException(
-                    $"The socket \"{socket.Path}\" could not be given mode {socketMode}.",
-                    exception
-                );
-            }
-
-            BrokerHostLog.UnixSocketReady(app.Logger, socket.Path, socketMode);
         }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new UnixSocketModeException(
+                $"The socket \"{socket.Path}\" could not be given mode {socketMode}.",
+                exception
+            );
+        }
+
+        return socketMode;
     }
 }

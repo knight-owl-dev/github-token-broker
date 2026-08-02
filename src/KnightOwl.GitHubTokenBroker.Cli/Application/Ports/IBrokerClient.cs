@@ -5,8 +5,8 @@ using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts.V1;
 namespace KnightOwl.GitHubTokenBroker.Cli.Application.Ports;
 
 /// <summary>
-/// The client's view of the broker. One abstraction over both transports, so
-/// selecting a Unix socket or authenticated TCP changes nothing above this line.
+/// The client's view of the broker, so how it is reached changes nothing above
+/// this line.
 /// </summary>
 public interface IBrokerClient
 {

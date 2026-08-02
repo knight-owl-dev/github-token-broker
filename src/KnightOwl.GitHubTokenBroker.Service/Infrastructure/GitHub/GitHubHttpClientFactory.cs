@@ -47,6 +47,10 @@ internal static class GitHubHttpClientFactory
         {
             PooledConnectionLifetime = ConnectionLifetime,
             AutomaticDecompression = DecompressionMethods.All,
+
+            // Minting never legitimately redirects, so following one would only
+            // ever take the request somewhere it was not addressed.
+            AllowAutoRedirect = false,
         };
 
         try

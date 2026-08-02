@@ -19,8 +19,7 @@ public static class UnixSocketPreparation
 {
     /// <summary>
     /// Mode for a socket directory this method creates. Traversal is the outer half
-    /// of the socket's authorization, and it also covers the moment between Kestrel
-    /// binding and the mode being applied to the socket itself.
+    /// of the socket's authorization.
     /// </summary>
     private const UnixFileMode DirectoryMode =
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
@@ -107,6 +106,10 @@ public static class UnixSocketPreparation
         // Write on the directory is the right to unlink the socket and bind another
         // in its place, so it is refused even when the socket's own mode is narrow.
         // Traversal for a group stays available through 0750.
+        //
+        // The owner is not checked: .NET exposes none, and a stat whose struct
+        // layout differs by platform and libc version is worse than the gap it
+        // closes. What that leaves open is in github-token-broker(8).
         var mode = new DirectoryInfo(parent).UnixFileMode;
         var writableByOthers =
             mode.HasFlag(UnixFileMode.GroupWrite) || mode.HasFlag(UnixFileMode.OtherWrite);

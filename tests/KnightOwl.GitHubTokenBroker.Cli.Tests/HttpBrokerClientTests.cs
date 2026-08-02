@@ -2,7 +2,6 @@ using System.Net;
 using System.Text;
 using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 using KnightOwl.GitHubTokenBroker.Domain.Repositories;
-using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts.V1;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 
@@ -175,7 +174,7 @@ public sealed class HttpBrokerClientTests
 
         foreach (var message in new[] { reach.Message, timeout.Message })
         {
-            Assert.Contains(Endpoint.UnixSocketPath!, message, StringComparison.Ordinal);
+            Assert.Contains(Endpoint.UnixSocketPath, message, StringComparison.Ordinal);
             Assert.DoesNotContain("localhost", message, StringComparison.Ordinal);
         }
     }

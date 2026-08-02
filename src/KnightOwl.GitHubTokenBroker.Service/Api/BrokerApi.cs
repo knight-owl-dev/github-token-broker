@@ -5,8 +5,8 @@ using System.Text.Json.Serialization.Metadata;
 using KnightOwl.GitHubTokenBroker.Domain.Access;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts.V1;
+using KnightOwl.GitHubTokenBroker.Infrastructure.Diagnostics;
 using KnightOwl.GitHubTokenBroker.Service.Application;
-using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Transport;
 
 
 namespace KnightOwl.GitHubTokenBroker.Service.Api;
@@ -78,11 +78,14 @@ internal static class BrokerApi
                     }
                     catch (TokenIssuanceException exception)
                     {
+                        // The chain rather than the outer message: a key that went
+                        // unreadable mid-flight says so only in the inner one, and
+                        // the log is the whole of what the client is told to read.
                         BrokerApiLog.MintFailed(
                             logger,
                             policy.Repository.FullName,
                             exception.Failure,
-                            exception.Message
+                            DiagnosticReport.Describe(exception)
                         );
 
                         await WriteErrorAsync(
@@ -131,7 +134,7 @@ internal static class BrokerApi
     {
         var logger = Logger(context);
 
-        if (!IsJson(context.Request.ContentType))
+        if (!context.Request.HasJsonContentType())
         {
             await WriteErrorAsync(
                 context,
@@ -158,6 +161,13 @@ internal static class BrokerApi
         catch (BadHttpRequestException)
         {
             // Raised when the body exceeds the configured maximum.
+            await WriteErrorAsync(context, HttpStatusCode.BadRequest, "malformed request");
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            // A charset the reader will not take. Refused here so every rejection
+            // is still one status and one message rather than an unhandled 500.
             await WriteErrorAsync(context, HttpStatusCode.BadRequest, "malformed request");
             return null;
         }
@@ -194,10 +204,6 @@ internal static class BrokerApi
             TokenIssuanceFailure.PrivateKeyUnusable => HttpStatusCode.InternalServerError,
             _ => HttpStatusCode.ServiceUnavailable,
         };
-
-    private static bool IsJson(string? contentType)
-        => contentType is not null
-            && contentType.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase);
 
     private static ILogger Logger(HttpContext context)
         => context.RequestServices

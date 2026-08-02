@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Configuration.Json;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Configuration.Validation;

@@ -246,7 +246,7 @@ example-owner/example-repo actions:read;checks:read;contents:write;pull_requests
 | 0 | success |
 | 64 | wrong command line or environment |
 | 69 | the service could not be reached |
-| 70 | an unexpected internal failure |
+| 70 | the service answered but could not serve the request; its log holds the reason |
 | 77 | the service refused the repository |
 | 78 | the allowlist and the App installation disagree |
 

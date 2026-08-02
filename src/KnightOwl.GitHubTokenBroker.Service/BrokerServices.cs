@@ -4,7 +4,6 @@ using KnightOwl.GitHubTokenBroker.Service.Application;
 using KnightOwl.GitHubTokenBroker.Service.Application.Ports;
 using KnightOwl.GitHubTokenBroker.Service.Infrastructure.GitHub;
 using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Signing;
-using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Transport;
 
 
 namespace KnightOwl.GitHubTokenBroker.Service;
@@ -19,9 +18,6 @@ internal static class BrokerServices
     {
         /// <summary>Registers everything the broker serves a request with.</summary>
         /// <param name="configuration">The loaded configuration.</param>
-        /// <exception cref="ConfigurationException">
-        /// A TCP listener is configured and its client credential could not be read.
-        /// </exception>
         public void AddBrokerServices(BrokerConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(services);
