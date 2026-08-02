@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 #
-# One vocabulary for results: [ OK ] and [FAIL], same width, at every level
-# from an assertion to a run image. Color is for terminals, so a redirected log
-# or a CI pane stays plain text.
+# One vocabulary for results: [ OK ], [FAIL], and [SKIP], same width, at every
+# level from an assertion to a run image. Color is for terminals, so a
+# redirected log or a CI pane stays plain text.
 #
 # Sourced by the host driver as well as the cases; shellcheck cannot see the
 # use from here.
@@ -11,12 +11,14 @@
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   FORMAT_GREEN=$'\033[32m'
   FORMAT_RED=$'\033[31m'
+  FORMAT_YELLOW=$'\033[33m'
   FORMAT_DIM=$'\033[2m'
   FORMAT_BOLD=$'\033[1m'
   FORMAT_RESET=$'\033[0m'
 else
   FORMAT_GREEN=""
   FORMAT_RED=""
+  FORMAT_YELLOW=""
   FORMAT_DIM=""
   FORMAT_BOLD=""
   FORMAT_RESET=""
@@ -24,7 +26,7 @@ fi
 
 LABEL_OK="${FORMAT_GREEN}[ OK ]${FORMAT_RESET}"
 LABEL_FAIL="${FORMAT_RED}[FAIL]${FORMAT_RESET}"
-LABEL_SKIP="${FORMAT_DIM}[SKIP]${FORMAT_RESET}"
+LABEL_SKIP="${FORMAT_YELLOW}[SKIP]${FORMAT_RESET}"
 
 # Width of a label, so continuation lines align under the text beside it.
 LABEL_INDENT="      "
