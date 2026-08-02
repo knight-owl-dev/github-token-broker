@@ -2,6 +2,7 @@ using System.Net;
 using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 using KnightOwl.GitHubTokenBroker.Domain.Access;
 using KnightOwl.GitHubTokenBroker.Domain.Repositories;
+using KnightOwl.GitHubTokenBroker.Infrastructure.Configuration;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts.V1;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
@@ -12,7 +13,6 @@ using KnightOwl.GitHubTokenBroker.Service.Domain.Tokens;
 using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Transport;
 using KnightOwl.GitHubTokenBroker.Service.Tests.Doubles;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -27,6 +27,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
 {
     private const string Credential = "0123456789abcdef0123456789abcdef";
     private const string Token = "ghs_opaqueTokenValue";
+    private const UnixFileMode SocketMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
     private static readonly RepositoryName Allowlisted =
         RepositoryName.Parse("example-owner/example-repo");
@@ -71,25 +72,14 @@ public sealed class BrokerTransportTests : IAsyncLifetime
         builder.Services.AddSingleton<TokenIssuingService>();
         builder.Services.AddSingleton(ClientCredential.Load(_credentialPath));
 
-        UnixSocketPreparation.Prepare(_socketPath);
-        builder.WebHost.ConfigureKestrel(options =>
-            {
-                // Mirrors the composition root: the body limit is a server setting, so an
-                // endpoint-only test host would not enforce it.
-                options.Limits.MaxRequestBodySize = BrokerProtocol.MaxRequestBytes;
-
-                options.ListenUnixSocket(_socketPath);
-                options.Listen(
-                    IPAddress.Loopback,
-                    0,
-                    listen => listen.Use(next => async connection =>
-                        {
-                            connection.Features.Set(new TcpTransportMarker());
-                            await next(connection);
-                        }
-                    )
-                );
-            }
+        // The composition root's own listener setup, so the body limit, the socket, and
+        // the marker that makes a TCP connection answerable to the credential gate are
+        // the ones the broker runs with.
+        builder.WebHost.UseBrokerListeners(
+            new ListenOptions(
+                new UnixSocketOptions(_socketPath, SocketMode),
+                new TcpListenerOptions(IPAddress.Loopback, 0, _credentialPath)
+            )
         );
 
         _app = builder.Build();
@@ -165,7 +155,9 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     {
         using var client = TcpClient(credential);
 
-        var failure = await Assert.ThrowsAsync<BrokerClientException>(() => client.RequestTokenAsync(Allowlisted, CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<BrokerClientException>(()
+            => client.RequestTokenAsync(Allowlisted, CancellationToken.None)
+        );
 
         Assert.Equal(BrokerClientFailure.Unauthenticated, failure.Failure);
     }
@@ -176,11 +168,17 @@ public sealed class BrokerTransportTests : IAsyncLifetime
         var unlisted = RepositoryName.Parse("other/upstream");
 
         using var overSocket = UnixClient();
-        var socketFailure = await Assert.ThrowsAsync<BrokerClientException>(() => overSocket.RequestTokenAsync(unlisted, CancellationToken.None));
+        var socketFailure = await Assert.ThrowsAsync<BrokerClientException>(()
+            => overSocket.RequestTokenAsync(unlisted, CancellationToken.None)
+        );
+
         Assert.Equal(BrokerClientFailure.Refused, socketFailure.Failure);
 
         using var overTcp = TcpClient(Credential);
-        var tcpFailure = await Assert.ThrowsAsync<BrokerClientException>(() => overTcp.RequestTokenAsync(unlisted, CancellationToken.None));
+        var tcpFailure = await Assert.ThrowsAsync<BrokerClientException>(()
+            => overTcp.RequestTokenAsync(unlisted, CancellationToken.None)
+        );
+
         Assert.Equal(BrokerClientFailure.Refused, tcpFailure.Failure);
     }
 

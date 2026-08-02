@@ -25,7 +25,6 @@ internal static class BrokerApi
     extension(WebApplication app)
     {
         /// <summary>Rejects TCP requests that do not present the client credential.</summary>
-        /// <returns>The same application, for chaining.</returns>
         /// <remarks>
         /// Applied to every route rather than only the minting ones: a uniform rule has
         /// no carve-out to get wrong, and a client that can reach the endpoint already
@@ -62,7 +61,6 @@ internal static class BrokerApi
         }
 
         /// <summary>Maps the health, token, and check routes.</summary>
-        /// <returns>The same application, for chaining.</returns>
         public void MapBrokerApi()
         {
             ArgumentNullException.ThrowIfNull(app);

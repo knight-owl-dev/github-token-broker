@@ -1,7 +1,10 @@
 namespace KnightOwl.GitHubTokenBroker.Service;
 
-/// <summary>Source-generated log messages emitted once at startup.</summary>
-internal static partial class BrokerStartupLog
+/// <summary>
+/// Source-generated log messages the host emits: the broker is serving, or it
+/// cannot and is stopping. Anything a request produces belongs to its own module.
+/// </summary>
+internal static partial class BrokerHostLog
 {
     [LoggerMessage(
         EventId = 3000,
