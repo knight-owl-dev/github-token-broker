@@ -19,21 +19,17 @@ internal static partial class BrokerHostLog
     );
 
     [LoggerMessage(
+        EventId = 3003,
+        Level = LogLevel.Information,
+        Message = "Private key {KeyId} loaded"
+    )]
+    public static partial void PrivateKeyLoaded(ILogger logger, string keyId);
+
+    [LoggerMessage(
         EventId = 3001,
         Level = LogLevel.Information,
         Message = "Listening on {SocketPath} with mode {SocketMode}"
     )]
     public static partial void UnixSocketReady(ILogger logger, string socketPath, string socketMode);
 
-    [LoggerMessage(
-        EventId = 3002,
-        Level = LogLevel.Critical,
-        Message = "The socket {SocketPath} could not be given mode {SocketMode}; shutting down rather than serving on a socket whose permissions are unknown"
-    )]
-    public static partial void UnixSocketModeFailed(
-        ILogger logger,
-        string socketPath,
-        string socketMode,
-        Exception exception
-    );
 }

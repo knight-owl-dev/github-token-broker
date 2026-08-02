@@ -117,13 +117,9 @@ public sealed class CredentialHelper
         }
         catch (BrokerClientException exception)
         {
+            // Refused never reaches here; the filter above declines it.
             await DiagnosticReport.WriteAsync(_error, Globals.AppName, exception);
-            return exception.Failure switch
-            {
-                BrokerClientFailure.Unavailable => CliExitCode.Unavailable,
-                BrokerClientFailure.Misconfigured => CliExitCode.Configuration,
-                _ => CliExitCode.Internal,
-            };
+            return exception.Failure.ExitCode;
         }
     }
 }

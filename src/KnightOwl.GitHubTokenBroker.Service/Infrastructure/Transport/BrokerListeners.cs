@@ -61,17 +61,14 @@ internal static class BrokerListeners
     /// <param name="app">The application whose socket is being narrowed.</param>
     extension(WebApplication app)
     {
-        /// <summary>
-        /// Applies the configured mode to the socket once it exists, and stops the
-        /// broker if it cannot.
-        /// </summary>
+        /// <summary>Gives the socket its configured mode.</summary>
         /// <param name="socket">The configured socket, or <see langword="null"/> for none.</param>
+        /// <exception cref="UnixSocketModeException">The mode could not be applied.</exception>
         /// <remarks>
-        /// The socket file exists only once the listener does, so the mode cannot be
-        /// applied alongside <see cref="UseBrokerListeners"/>. Failing stops the broker:
-        /// this transport cannot serve on a socket whose permissions are unknown.
+        /// Binding creates the socket file, so this belongs after the host has
+        /// started rather than alongside <see cref="UseBrokerListeners"/>.
         /// </remarks>
-        public void ApplyUnixSocketModeOnStart(UnixSocketOptions? socket)
+        public void NarrowUnixSocket(UnixSocketOptions? socket)
         {
             ArgumentNullException.ThrowIfNull(app);
 
@@ -81,30 +78,23 @@ internal static class BrokerListeners
             }
 
             var socketMode = UnixSocketPreparation.Format(socket.Mode);
-            app.Lifetime.ApplicationStarted.Register(() =>
+
+            try
+            {
+                if (!OperatingSystem.IsWindows())
                 {
-                    try
-                    {
-                        if (!OperatingSystem.IsWindows())
-                        {
-                            File.SetUnixFileMode(socket.Path, socket.Mode);
-                        }
-
-                        BrokerHostLog.UnixSocketReady(app.Logger, socket.Path, socketMode);
-                    }
-                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                    {
-                        BrokerHostLog.UnixSocketModeFailed(
-                            app.Logger,
-                            socket.Path,
-                            socketMode,
-                            exception
-                        );
-
-                        app.Lifetime.StopApplication();
-                    }
+                    File.SetUnixFileMode(socket.Path, socket.Mode);
                 }
-            );
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                throw new UnixSocketModeException(
+                    $"The socket \"{socket.Path}\" could not be given mode {socketMode}.",
+                    exception
+                );
+            }
+
+            BrokerHostLog.UnixSocketReady(app.Logger, socket.Path, socketMode);
         }
     }
 }

@@ -2,6 +2,7 @@ using KnightOwl.GitHubTokenBroker.Infrastructure.Configuration;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Diagnostics;
 using KnightOwl.GitHubTokenBroker.Service;
 using KnightOwl.GitHubTokenBroker.Service.Api;
+using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Signing;
 using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Transport;
 
 
@@ -32,9 +33,46 @@ catch (ConfigurationException exception)
     return BrokerExitCode.Configuration;
 }
 
+// Proven before serving, so a broker that answers /health and /v1/check can also
+// mint. The per-mint read stays, and is what picks up a replacement key.
+try
+{
+    using var privateKey = app.Services.GetRequiredService<IPrivateKeySource>().Load();
+    BrokerHostLog.PrivateKeyLoaded(app.Logger, privateKey.KeyId);
+}
+catch (ConfigurationException exception)
+{
+    await DiagnosticReport.WriteAsync(Console.Error, "private key error", exception);
+    return BrokerExitCode.PrivateKey;
+}
+
 app.UseClientCredentialGate();
 app.MapBrokerApi();
-app.ApplyUnixSocketModeOnStart(configuration.Listen.UnixSocket);
+
+// Started rather than run, so the socket can be narrowed between binding and
+// serving.
+try
+{
+    await app.StartAsync();
+}
+catch (IOException exception)
+{
+    // Kestrel binds here rather than at build, so an occupied port reports like
+    // the occupied socket path that UseBrokerListeners already refuses.
+    await DiagnosticReport.WriteAsync(Console.Error, "configuration error", exception);
+    return BrokerExitCode.Configuration;
+}
+
+try
+{
+    app.NarrowUnixSocket(configuration.Listen.UnixSocket);
+}
+catch (UnixSocketModeException exception)
+{
+    await DiagnosticReport.WriteAsync(Console.Error, "socket error", exception);
+    await app.StopAsync();
+    return BrokerExitCode.SocketMode;
+}
 
 BrokerHostLog.Ready(
     app.Logger,
@@ -43,5 +81,5 @@ BrokerHostLog.Ready(
     configuration.Allowlist.Count
 );
 
-await app.RunAsync();
+await app.WaitForShutdownAsync();
 return BrokerExitCode.Success;

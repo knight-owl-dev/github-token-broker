@@ -21,7 +21,7 @@ public static class CliExitCode
     /// <summary>The broker could not be reached.</summary>
     public const int Unavailable = 69;
 
-    /// <summary>The broker refused the repository.</summary>
+    /// <summary>The broker refused the repository, or rejected the client credential.</summary>
     public const int NotAuthorized = 77;
 
     /// <summary>

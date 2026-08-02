@@ -1,0 +1,364 @@
+.Dd August 2, 2026
+.Dt GITHUB-TOKEN-BROKER-CONFIG 5
+.Os
+.\" -------------------------------------------------------------------------
+.Sh NAME
+.Nm github-token-broker-config
+.Nd configuration file format for github-token-broker
+.\" -------------------------------------------------------------------------
+.Sh DESCRIPTION
+.Xr github-token-broker 8
+reads one JSON file, named on the command line as an absolute path:
+.Bd -literal -offset indent
+github-token-broker --config /etc/github-token-broker/config.json
+.Ed
+.Pp
+The file names the App to mint as, where requests are accepted, and which
+repositories may be minted for.
+Nothing else decides any of those, and no client can influence them: an
+environment variable cannot add a listener or reach a repository this document
+omits.
+The log level is the one setting that lives outside; see
+.Xr github-token-broker 8 .
+.Pp
+The document is read once at startup, so a change takes effect on restart.
+.Pp
+An unrecognized member anywhere in the document fails startup, so a misspelled
+security-sensitive key is refused rather than silently ignored.
+Comments and trailing commas are not accepted either; this is strict JSON.
+.\" -------------------------------------------------------------------------
+.Sh TOP-LEVEL SETTINGS
+.Bl -tag -width Ds
+.It Ic app_id
+Required.
+The App's numeric identity, from its registration.
+Signed into every JWT as
+.Ql iss .
+Must be positive.
+.It Ic installation_id
+Required.
+Which installation of that App to mint against, the number at the end of the
+installation's settings URL.
+Must be positive.
+.It Ic private_key_path
+Required.
+Absolute path to the App's PEM private key.
+Re-read on every mint, so replacing the file rotates the key with no restart.
+.It Ic listen
+Required.
+Where requests are accepted.
+See
+.Sx LISTEN .
+.It Ic repositories
+Required.
+The allowlist, and the permission ceiling for each entry.
+See
+.Sx REPOSITORIES .
+.It Ic github_host
+Defaults to
+.Ql github.com ,
+which is the only accepted value today.
+The setting exists so that a second host becomes a configuration change rather
+than a code change.
+.It Ic api_url
+Defaults to
+.Ql https://api.github.com .
+Must be
+.Ql https ,
+or
+.Ql http
+against loopback only.
+A query or fragment is refused.
+It exists to point the broker at a fake in a test, which is why plaintext is
+tolerated there and nowhere else.
+This is not GitHub Enterprise support.
+.It Ic token_refresh_margin_seconds
+Defaults to
+.Ql 300 .
+How much life a cached token must have left to be reused.
+Between 30 and 1800: an installation token lives one hour, so a margin
+approaching that would make every token stale on arrival.
+.El
+.\" -------------------------------------------------------------------------
+.Sh REPOSITORIES
+.Ic repositories
+is the whole of what may be minted.
+A client names one repository and receives a token for it.
+It cannot reach a repository absent from this list, and cannot influence the
+permissions attached to one that is present.
+.Bd -literal -offset indent
+{
+  "repositories": {
+    "example-owner/example-repo": {
+      "permissions": {
+        "contents": "write",
+        "pull_requests": "write",
+        "actions": "read"
+      }
+    },
+    "example-owner/another-repo": {
+      "permissions": { "contents": "read" }
+    }
+  }
+}
+.Ed
+.Pp
+Each key names a repository in
+.Ar OWNER Ns / Ns Ar REPOSITORY
+form, spelled the way GitHub spells it and without a
+.Pa .git
+suffix.
+At least one repository is required, and each entry must declare at least one
+permission.
+.Pp
+Matching ignores case, as GitHub's does.
+Two entries differing only in case would collapse onto one identity, so the
+pair is refused.
+This applies to the repository key alone; the permission names and levels under
+it are matched exactly.
+.Pp
+A repository absent from the list is refused with the same status and message
+as every other refusal, so a caller cannot use error text to discover what is
+here.
+.\"
+.Ss Permissions are a ceiling
+The map under a repository is exactly what the broker asks GitHub for, and a
+grant exceeding it is refused rather than returned.
+A token therefore never carries more authority than is written here, even where
+the installation would allow more.
+.Pp
+Supported permissions, each at
+.Ql read
+or
+.Ql write :
+.Ql metadata ,
+.Ql contents ,
+.Ql pull_requests ,
+.Ql issues ,
+.Ql actions ,
+.Ql checks ,
+.Ql statuses .
+A name outside this set fails validation rather than reaching GitHub.
+.Pp
+.Ql Contents
+and
+.Ql Read
+are therefore refused as unsupported.
+.Pp
+GitHub reports
+.Ql metadata: read
+on every installation token whether or not it was asked for, so that one grant
+is tolerated in a response even when configuration omits it.
+.Pp
+Which of these to grant is a deployment question; see SECURITY CONSIDERATIONS
+in
+.Xr github-token-broker 8 .
+.Pp
+.Ql workflows
+is refused at any level, with a diagnostic distinct from an unsupported name:
+authority over workflow files is outside this design.
+.Pp
+Narrowing an entry takes effect on the next mint rather than the next restart,
+since the cache is keyed by the effective permissions as well as by the
+repository.
+.\" -------------------------------------------------------------------------
+.Sh LISTEN
+.Ic listen
+must configure
+.Ic unix_socket ,
+.Ic tcp ,
+or both.
+A section configuring neither is refused, as is
+.Ic unix_socket_mode
+with no socket to apply it to.
+.\"
+.Ss Unix socket
+The recommended shape, and the one to reach for unless a caller cannot see the
+host filesystem.
+Authorization is filesystem access, so there is no shared secret to distribute,
+rotate, or leak.
+.Bd -literal -offset indent
+{
+  "app_id": 123456,
+  "installation_id": 789012,
+  "private_key_path": "/etc/github-token-broker/app.pem",
+  "listen": {
+    "unix_socket": "/run/github-token-broker/broker.sock",
+    "unix_socket_mode": "0600"
+  },
+  "repositories": {
+    "example-owner/example-repo": {
+      "permissions": {
+        "contents": "write",
+        "pull_requests": "write"
+      }
+    }
+  }
+}
+.Ed
+.Bl -tag -width Ds
+.It Ic unix_socket
+Required for this shape.
+Absolute path to bind.
+Must fit the platform's
+.Vt sockaddr_un
+limit, which is 104 bytes on macOS and 108 on Linux.
+.It Ic unix_socket_mode
+Defaults to
+.Ql 0600 .
+Three octal digits, optionally with a leading zero, written as a JSON string.
+.El
+.Pp
+Connecting needs write permission on the socket, so this mode is who may mint.
+A mode granting write to others is refused, as is one that withholds read and
+write from the owner.
+The setuid, setgid, and sticky bits are not accepted here.
+.Pp
+Sharing with a group is
+.Ql 0660
+plus group ownership from the service unit.
+The socket's directory is the outer half of the same control; see
+.Xr github-token-broker 8 .
+.\"
+.Ss TCP
+For a caller that cannot see the host filesystem, such as a container reaching
+its host.
+Filesystem permissions mean nothing across that boundary, so a shared secret
+takes their place.
+.Bd -literal -offset indent
+{
+  "listen": {
+    "tcp": {
+      "address": "127.0.0.1",
+      "port": 8765,
+      "client_credential_path":
+        "/etc/github-token-broker/client-credential"
+    }
+  }
+}
+.Ed
+.Bl -tag -width Ds
+.It Ic address
+Required.
+The IP address to bind.
+Loopback, or a private range:
+.Ql 10.0.0.0/8 ,
+.Ql 172.16.0.0/12 ,
+.Ql 192.168.0.0/16 ,
+.Ql 169.254.0.0/16 ,
+and the IPv6 link-local and unique-local equivalents.
+.It Ic port
+Required.
+The port to bind, 1 to 65535.
+.It Ic client_credential_path
+Required.
+Absolute path to a file holding the client credential.
+.El
+.Pp
+There is no TLS, so the credential crosses the connection in cleartext and this
+transport reaches no further than the host and its private network.
+Startup refuses a public address.
+It also refuses
+.Ql 0.0.0.0
+and
+.Ql :: :
+a wildcard covers every interface the host has, including ones it may grow
+later, so name the interface instead.
+.Pp
+Which address a container can reach depends on its runtime; see
+.Xr github-token 1 .
+.\"
+.Ss Both at once
+One broker can serve local processes over the socket and a container over TCP
+at the same time.
+The credential requirement follows the connection rather than the broker: a
+request arriving on TCP must present it, and a request arriving on the socket
+must not be asked for one.
+.Bd -literal -offset indent
+{
+  "listen": {
+    "unix_socket": "/run/github-token-broker/broker.sock",
+    "unix_socket_mode": "0600",
+    "tcp": {
+      "address": "127.0.0.1",
+      "port": 8765,
+      "client_credential_path":
+        "/etc/github-token-broker/client-credential"
+    }
+  }
+}
+.Ed
+.\" -------------------------------------------------------------------------
+.Sh FILES
+Both are named by path rather than by value, so this document carries no secret
+and can be read by anyone who needs to understand the deployment.
+.Bl -tag -width Ds
+.It The App private key
+Named by
+.Ic private_key_path .
+A PEM RSA private key, readable only by the account the broker runs as.
+It is read at startup, so an unreadable one fails the broker with its own exit
+status rather than surfacing at the first mint.
+Where it may live, and why not in a container, is in
+.Xr github-token-broker 8 .
+.It The client credential
+Named by
+.Ic listen.tcp.client_credential_path .
+A high-entropy shared secret of at least 32 characters, compared in constant
+time and never logged.
+Leading and trailing whitespace is stripped, here and in the client's copy.
+The newline every editor and
+.Xr openssl 1
+pipeline leaves behind therefore needs no trimming by hand.
+.Bd -literal -offset indent
+cd /etc/github-token-broker
+openssl rand -hex 32 > client-credential
+chmod 0600 client-credential
+.Ed
+.Pp
+It authorizes reaching this broker and nothing more.
+It is not a GitHub credential and not the App private key.
+.Pp
+It belongs to the endpoint rather than to a caller.
+One value serves every TCP client, the broker never learns which one is asking,
+and presenting it confers the whole allowlist.
+There is no way to withdraw it from one caller alone.
+.Pp
+Unlike the private key it is read once at startup.
+Rotating it means replacing the file, restarting the broker, and updating every
+client together.
+.El
+.Pp
+The client reads the same value from
+.Ev GITHUB_TOKEN_BROKER_CREDENTIAL_FILE ;
+see
+.Xr github-token 1 .
+.\" -------------------------------------------------------------------------
+.Sh DIAGNOSTICS
+A document that fails validation is reported on standard error and the broker
+exits 78 without listening.
+The message names the member at fault and never echoes a secret.
+.Bd -literal -offset indent
+$ github-token-broker --config /etc/github-token-broker/config.json
+configuration error: The token_refresh_margin_seconds value must be
+between 30 and 1800.
+.Ed
+.\" -------------------------------------------------------------------------
+.Sh SEE ALSO
+.Xr github-token 1 ,
+.Xr github-token-broker 8
+.\" -------------------------------------------------------------------------
+.Sh VERSION
+.Nm
+@VERSION@
+.\" -------------------------------------------------------------------------
+.Sh AUTHORS
+.An Knight Owl LLC
+.Pp
+.Lk https://github.com/knight-owl-dev/github-token-broker
+.\" -------------------------------------------------------------------------
+.Sh LICENSE
+MIT.
+See the
+.Pa LICENSE
+file in the distribution.

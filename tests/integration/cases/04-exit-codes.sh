@@ -81,6 +81,11 @@ run_capture env \
   github-token check "${SERVED_REPOSITORY}"
 assert_eq "an endpoint with nothing behind it is unavailable" 69 "${RUN_STATUS}"
 
+# The wrapped message's wording comes from the platform's errno, so only the
+# endpoint is asserted on.
+assert_contains "and names the endpoint rather than its placeholder authority" \
+  "${RUN_STDERR}" "unix://${WORK}/absent.sock"
+
 # --- 0 and 77, against a running broker ---------------------------------------
 
 broker_start "${CONFIG}" "${LOG}"
@@ -96,6 +101,9 @@ if broker_wait_socket; then
 
   cli check "${UNLISTED_REPOSITORY}"
   assert_eq "a repository the broker will not serve is not authorized" 77 "${RUN_STATUS}"
+  assert_contains "and names the repository" "${RUN_STDERR}" "${UNLISTED_REPOSITORY}"
+  assert_not_contains "rather than the credential it shares a status with" \
+    "${RUN_STDERR}" "client credential"
   assert_empty "and no permissions are disclosed" "${RUN_STDOUT}"
 else
   BROKER_OUTPUT="$(broker_log)"
@@ -104,10 +112,10 @@ fi
 
 broker_stop
 
-# --- 70, the broker answered but the client could not use the answer ----------
+# --- 77 over TCP, a credential the broker rejects -----------------------------
 #
-# A rejected TCP credential is the one internal failure reachable without a
-# GitHub to talk to.
+# Shares its status with the refused repository above, so the message is
+# asserted to carry which one it was.
 
 TCP_CONFIG="${WORK}/tcp-config.json"
 TCP_LOG="${WORK}/tcp-broker.log"
@@ -129,7 +137,9 @@ if broker_wait_log 'Now listening on'; then
     "GITHUB_TOKEN_BROKER_ENDPOINT=http://127.0.0.1:${TCP_PORT}" \
     "GITHUB_TOKEN_BROKER_CREDENTIAL=wrong-credential-long-enough-to-send" \
     github-token check "${SERVED_REPOSITORY}"
-  assert_eq "a rejected credential is an internal failure" 70 "${RUN_STATUS}"
+  assert_eq "a rejected credential is not authorized" 77 "${RUN_STATUS}"
+  assert_contains "and names the credential rather than the repository" \
+    "${RUN_STDERR}" "client credential"
   assert_empty "and no permissions are disclosed" "${RUN_STDOUT}"
 else
   BROKER_OUTPUT="$(broker_log)"
@@ -233,6 +243,65 @@ reject remote-api "a plaintext api_url that is not loopback is refused" << JSON
   "repositories": { "${SERVED_REPOSITORY}": { "permissions": { "contents": "read" } } }
 }
 JSON
+
+# --- 66, the private key ------------------------------------------------------
+#
+# Paired with the same configuration once the key is there. Without that, 66
+# would pass for any startup failure at all.
+
+LATE_KEY="${WORK}/late.pem"
+LATE_CONFIG="${WORK}/late-config.json"
+LATE_SOCKET="${WORK}/run/late.sock"
+fixture_config "${LATE_CONFIG}" "${LATE_KEY}" --socket "${LATE_SOCKET}"
+
+broker --config "${LATE_CONFIG}"
+assert_eq "an unreadable private key is its own status" 66 "${RUN_STATUS}"
+assert_contains "and names the key rather than the configuration" \
+  "${RUN_STDERR}" "private key"
+
+# The false green this replaced: the broker used to serve /health and answer
+# check on a key it could not read.
+if [[ -e "${LATE_SOCKET}" ]]; then
+  fail "and nothing is left listening" "${LATE_SOCKET} is still there"
+else
+  pass "and nothing is left listening"
+fi
+
+fixture_key "${LATE_KEY}"
+broker_start "${LATE_CONFIG}" "${WORK}/late-broker.log"
+
+if broker_wait_socket; then
+  pass "the same configuration starts once the key is readable"
+else
+  BROKER_OUTPUT="$(broker_log)"
+  fail "the same configuration starts once the key is readable" "${BROKER_OUTPUT}"
+fi
+
+broker_stop
+
+# --- 78, a listener that cannot bind ------------------------------------------
+#
+# The TCP counterpart of an occupied socket path. Kestrel binds when the host
+# starts rather than when it is built, so this used to abort with a stack trace.
+
+BUSY_CONFIG="${WORK}/busy-config.json"
+BUSY_PORT="$(fixture_free_port)"
+fixture_config "${BUSY_CONFIG}" "${WORK}/app.pem" \
+  --tcp 127.0.0.1 "${BUSY_PORT}" "${WORK}/credential"
+
+broker_start "${BUSY_CONFIG}" "${WORK}/busy-broker.log"
+
+if broker_wait_log 'Now listening on'; then
+  broker --config "${BUSY_CONFIG}"
+  assert_eq "a port already in use is a configuration error" 78 "${RUN_STATUS}"
+  assert_contains "and reports rather than aborting" "${RUN_STDERR}" "configuration error"
+  assert_contains "naming the address it could not have" "${RUN_STDERR}" "${BUSY_PORT}"
+else
+  BROKER_OUTPUT="$(broker_log)"
+  fail "the first broker binds the port" "${BROKER_OUTPUT}"
+fi
+
+broker_stop
 
 # --- 0, a broker asked to stop ------------------------------------------------
 

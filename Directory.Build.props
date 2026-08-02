@@ -10,7 +10,8 @@
         <!-- CA1008: these enums deliberately omit a zero member, so a defaulted value is detectably invalid rather than silently meaningful -->
         <!-- CA1032: every exception here carries a required failure classification; a parameterless constructor would produce an unclassified instance -->
         <!-- CA1849: console writes in a short-lived CLI are synchronous by design; ordering and flush-before-exit matter more than not blocking -->
-        <NoWarn>$(NoWarn);CA1008;CA1032;CA1515;CA1716;CA1849;CA2007;VSTHRD103</NoWarn>
+        <!-- CS8524: only this code constructs these values, so the arm a default would add is unreachable; omitting it keeps CS8509 fatal for a member added without a case -->
+        <NoWarn>$(NoWarn);CA1008;CA1032;CA1515;CA1716;CA1849;CA2007;CS8524;VSTHRD103</NoWarn>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>

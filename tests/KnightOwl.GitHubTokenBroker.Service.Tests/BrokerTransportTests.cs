@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.Versioning;
 using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 using KnightOwl.GitHubTokenBroker.Domain.Access;
 using KnightOwl.GitHubTokenBroker.Domain.Repositories;
@@ -104,14 +105,14 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     }
 
     private HttpBrokerClient UnixClient()
-        => new(
-            BrokerHttpClientFactory.Create(BrokerEndpoint.Parse($"unix://{_socketPath}")),
+        => HttpBrokerClient.Create(
+            BrokerEndpoint.Parse($"unix://{_socketPath}"),
             clientCredential: null
         );
 
     private HttpBrokerClient TcpClient(string? credential)
-        => new(
-            BrokerHttpClientFactory.Create(BrokerEndpoint.Parse($"http://127.0.0.1:{_tcpPort}")),
+        => HttpBrokerClient.Create(
+            BrokerEndpoint.Parse($"http://127.0.0.1:{_tcpPort}"),
             credential
         );
 
@@ -245,6 +246,35 @@ public sealed class BrokerTransportTests : IAsyncLifetime
         );
 
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    // The broker publishes for osx and linux only; a Unix mode has no Windows
+    // meaning, and the attribute says so where a runtime guard would leave the
+    // assertions silently skipped.
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public void NarrowsTheSocketItBound()
+    {
+        const UnixFileMode group = SocketMode | UnixFileMode.GroupRead | UnixFileMode.GroupWrite;
+
+        _app!.NarrowUnixSocket(new UnixSocketOptions(_socketPath, group));
+
+        Assert.Equal(group, File.GetUnixFileMode(_socketPath));
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public void RefusesASocketItCannotNarrow()
+    {
+        // The bound socket above proves the same call succeeds, so this is the
+        // mode failing rather than the method never working.
+        var absent = Path.Combine(_root, "absent.sock");
+
+        var failure = Assert.Throws<UnixSocketModeException>(
+            () => _app!.NarrowUnixSocket(new UnixSocketOptions(absent, SocketMode))
+        );
+
+        Assert.Contains(absent, failure.Message, StringComparison.Ordinal);
     }
 
     /// <summary>Stands in for GitHub, returning one fixed token.</summary>

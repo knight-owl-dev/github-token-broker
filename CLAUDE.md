@@ -10,6 +10,7 @@ installation tokens, and a client that supplies them to Git and the GitHub CLI.
 | For | Read |
 | --- | --- |
 | what it does, the API, configuration, build and test, assembly layout | `README.md`, which is the source of truth |
+| the commands, settings, and exit statuses | `docs/man/`, via `make man NAME=github-token` |
 | the recipes and their options | `make help` |
 | why the integration suite has container machinery | `tests/integration/container/README.md` |
 
@@ -27,6 +28,10 @@ installation tokens, and a client that supplies them to Git and the GitHub CLI.
   `LoggerMessage` template.
 - A wrapped exception keeps its own wording; `DiagnosticReport` prints the chain
   rather than splicing an inner message into ours.
+- The man pages own the reference material — commands, settings, exit statuses.
+  Prose links to `github-token(1)`, `github-token-broker-config(5)`, or
+  `github-token-broker(8)` rather than restating them. `README.md` still carries
+  its own copy until it is split by reader.
 - Interfaces document the contract; implementations use `<inheritdoc />` and
   extend it only where their behavior differs.
 - A breaking wire change adds `Infrastructure.Contracts.V2` alongside `V1`, which
@@ -60,6 +65,10 @@ the real binaries on a real distro.
 **`IDE1006` naming violations cannot be auto-fixed**, so `make lint-fix` leaves
 them and the rename has to be deliberate.
 
+**A `switch` over an enum omits its default arm on purpose**, so `CS8509` fails
+the build on a member added without a case. Adding `_ =>` silences it. See
+`Directory.Build.props` for the suppression that makes this compile.
+
 **MSBuild reads only the nearest `Directory.Packages.props`**, which is why the
 one under `tests/` imports the root policy instead of standing alone.
 
@@ -68,7 +77,14 @@ dictionary's compound matching still admits `colour` and `analyser`. Spelling is
 a review concern, not only a lint one.
 
 **Version is hand-set once**, as `<Version>` in `Directory.Build.props`. Both
-executables inherit it and ship as one package under one tag.
+executables inherit it and ship as one package under one tag. The man pages
+carry `@VERSION@`, which `make man-build` replaces into `artifacts/man`.
+
+**An mdoc macro name eats an ordinary word.** `.Ss An occupied path` renders as
+"occupied path", because `An` is the AUTHOR macro; `No`, `In`, `At`, and `St`
+bite the same way. `mandoc` reports nothing, so it only shows up in the render.
+Escape the leading word with `\&`. Blank lines are refused too — `.\"` is what
+separates sections in the source.
 
 **`TestKeys` hands out two RSA keys per assembly**, since generating them per
 test dominates the run.

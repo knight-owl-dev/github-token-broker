@@ -9,6 +9,7 @@ using KnightOwl.GitHubTokenBroker.Domain.Access;
 using KnightOwl.GitHubTokenBroker.Domain.Repositories;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts.V1;
+using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 
 
 namespace KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
@@ -24,20 +25,38 @@ namespace KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 public sealed class HttpBrokerClient : IBrokerClient, IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly BrokerEndpoint _endpoint;
     private readonly string? _clientCredential;
 
-    /// <summary>Creates the client.</summary>
-    /// <param name="httpClient">Client already bound to the broker endpoint.</param>
+    /// <summary>Creates the client over a caller-supplied transport.</summary>
+    /// <param name="httpClient">Client bound to <paramref name="endpoint"/>.</param>
+    /// <param name="endpoint">The endpoint, named when the broker cannot be reached.</param>
     /// <param name="clientCredential">
     /// Credential for the TCP transport, or <see langword="null"/> on a Unix socket.
     /// </param>
-    public HttpBrokerClient(HttpClient httpClient, string? clientCredential)
+    /// <remarks>
+    /// Nothing outside this assembly can hand the two arguments a transport that
+    /// disagrees with the endpoint it reports; <see cref="Create"/> derives one
+    /// from the other.
+    /// </remarks>
+    internal HttpBrokerClient(HttpClient httpClient, BrokerEndpoint endpoint, string? clientCredential)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(endpoint);
 
         _httpClient = httpClient;
+        _endpoint = endpoint;
         _clientCredential = clientCredential;
     }
+
+    /// <summary>Creates a client and the transport it talks over.</summary>
+    /// <param name="endpoint">The broker endpoint to reach.</param>
+    /// <param name="clientCredential">
+    /// Credential for the TCP transport, or <see langword="null"/> on a Unix socket.
+    /// </param>
+    /// <returns>A client the caller owns and must dispose.</returns>
+    public static HttpBrokerClient Create(BrokerEndpoint endpoint, string? clientCredential)
+        => new(BrokerHttpClientFactory.Create(endpoint), endpoint, clientCredential);
 
     /// <inheritdoc/>
     public Task<BrokerTokenResponse> RequestTokenAsync(
@@ -105,15 +124,17 @@ public sealed class HttpBrokerClient : IBrokerClient, IDisposable
         {
             throw new BrokerClientException(
                 BrokerClientFailure.Unavailable,
-                "The broker did not answer in time.",
+                $"The broker at {_endpoint} did not answer in time.",
                 exception
             );
         }
         catch (HttpRequestException exception)
         {
+            // Named because the wrapped message reports the request URI, whose
+            // authority is a placeholder on a Unix socket.
             throw new BrokerClientException(
                 BrokerClientFailure.Unavailable,
-                "The broker could not be reached.",
+                $"The broker at {_endpoint} could not be reached.",
                 exception
             );
         }

@@ -227,6 +227,7 @@ internal static class BrokerApi
             TokenIssuanceFailure.InstallationOrRepositoryMissing => HttpStatusCode.Conflict,
             TokenIssuanceFailure.PermissionDrift => HttpStatusCode.InternalServerError,
             TokenIssuanceFailure.UntrustworthyResponse => HttpStatusCode.InternalServerError,
+            TokenIssuanceFailure.PrivateKeyUnusable => HttpStatusCode.InternalServerError,
             _ => HttpStatusCode.ServiceUnavailable,
         };
 

@@ -1,0 +1,351 @@
+.Dd August 2, 2026
+.Dt GITHUB-TOKEN 1
+.Os
+.\" -------------------------------------------------------------------------
+.Sh NAME
+.Nm github-token
+.Nd supply short-lived GitHub App tokens to Git and the GitHub CLI
+.\" -------------------------------------------------------------------------
+.Sh SYNOPSIS
+.Nm
+.Cm credential
+.Op Cm get | store | erase
+.Nm
+.Cm gh
+.Ar OWNER Ns / Ns Ar REPOSITORY
+.Fl -
+.Ar gh-argument ...
+.Nm
+.Cm check
+.Ar OWNER Ns / Ns Ar REPOSITORY
+.Nm
+.Cm version
+.\" -------------------------------------------------------------------------
+.Sh DESCRIPTION
+.Nm
+obtains a repository-scoped GitHub App installation token from
+.Xr github-token-broker 8
+and hands it to Git or to the GitHub CLI.
+A token is scoped to one repository, is never written to disk, and is obtained
+fresh for each use rather than held.
+.Pp
+The client holds no configuration file.
+It is told where the broker is, and it names one repository per request.
+It never learns the App identity, the private key path, or which other
+repositories the broker serves.
+.\" -------------------------------------------------------------------------
+.Sh COMMANDS
+.Bl -tag -width Ds
+.It Cm credential Op Cm get | store | erase
+Serve Git's credential-helper protocol on standard input and output.
+Git supplies the operation.
+See
+.Sx CREDENTIAL HELPER BEHAVIOR .
+.It Cm gh Ar OWNER Ns / Ns Ar REPOSITORY Fl - Ar gh-argument ...
+Run the real GitHub CLI authenticated for one repository.
+The repository is named explicitly rather than inferred from the working
+directory, the
+.Ql --
+separator is required, and at least one argument must follow it.
+See
+.Sx GITHUB CLI INTEGRATION .
+.It Cm check Ar OWNER Ns / Ns Ar REPOSITORY
+Report whether the broker is reachable and will serve a repository.
+Nothing is minted.
+On success it writes the repository and its permission ceiling to standard
+output:
+.Bd -literal -offset indent
+example-owner/example-repo actions:read;contents:write
+.Ed
+.It Cm version
+Print the version and exit.
+This is answered before the environment is read, so it works on a host where
+the broker endpoint is not configured yet.
+.El
+.Pp
+A repository is written as
+.Ar OWNER Ns / Ns Ar REPOSITORY ,
+spelled the way GitHub spells it and without a
+.Pa .git
+suffix.
+A value that is not already canonical is refused rather than repaired, so no
+two spellings can collapse onto one identity.
+.\" -------------------------------------------------------------------------
+.Sh GIT INTEGRATION
+Configure the helper and path-aware credential matching:
+.Bd -literal -offset indent
+git config --global credential.helper '!github-token credential'
+git config --global \e
+    credential.https://github.com.useHttpPath true
+export GITHUB_TOKEN_BROKER_ENDPOINT=\e
+    unix:///run/github-token-broker/broker.sock
+.Ed
+.Pp
+A bot that clones needs
+.Fl -global :
+without it,
+.Ic git config
+must run inside an existing repository, and the one being cloned does not exist
+yet.
+Drop it to configure a single repository instead.
+.Pp
+Git resolves a bare helper name as
+.Ql git-credential- Ns Ar NAME ,
+and runs the value as a command only when it begins with
+.Ql \&!
+or names an absolute path.
+.Pp
+Without
+.Cm useHttpPath
+Git omits the repository path, and one repository's token would satisfy a
+request for another.
+.Pp
+The socket path above is an example.
+.Ev GITHUB_TOKEN_BROKER_ENDPOINT
+has to name whatever the broker binds; see
+.Ic listen
+in
+.Xr github-token-broker-config 5 .
+.Pp
+The two
+.Ic git config
+settings persist; the export does not.
+Git spawns the helper as a child, so the variable has to be set wherever Git
+runs: a shell profile, a service unit, or a CI job.
+Exporting it in one shell configures that shell alone.
+.Pp
+Use HTTPS remotes with no embedded credentials.
+Clone, fetch, and push then work.
+.\" -------------------------------------------------------------------------
+.Sh CREDENTIAL HELPER BEHAVIOR
+The helper answers
+.Cm get
+with:
+.Bd -literal -offset indent
+username=x-access-token
+password=INSTALLATION_TOKEN
+.Ed
+.Pp
+.Cm store
+and
+.Cm erase
+are answered without minting.
+A token lives for an hour and is never persisted, so there is nothing to store
+or erase.
+.Pp
+Declining and failing are different.
+Git treats a helper that returns nothing as having no credential and carries on
+unauthenticated, which is correct for a repository this broker does not serve.
+An unreachable broker is reported instead.
+.Bl -tag -width Ds
+.It Repository not allowlisted
+Declines silently.
+Git proceeds unauthenticated.
+.It Host or protocol not served
+Declines silently.
+Only
+.Ql https
+requests for
+.Ql github.com
+are served, and Git asks broadly.
+.It \&No repository path
+Reported on standard error, then declines.
+This means
+.Cm useHttpPath
+is missing.
+.It Repository path unusable
+Reported on standard error, then declines.
+The path is present but is not
+.Ar OWNER Ns / Ns Ar REPOSITORY .
+.It Broker unreachable
+Reported on standard error, and exits non-zero rather than degrading a private
+repository into a confusing anonymous failure.
+.El
+.Pp
+All but the last decline, so Git carries on unauthenticated and the failure
+surfaces as GitHub's own
+.Sy 403
+or
+.Sy 404 .
+When a push or fetch starts failing on permissions, check here first:
+.Dl $ github-token check example-owner/example-repo
+.Pp
+Nothing read from or written to Git is logged; the input can carry a password
+on a
+.Cm store
+operation.
+The format is line-based, so a token holding whitespace or a control character
+is refused: it could otherwise append fields of its own.
+.\" -------------------------------------------------------------------------
+.Sh GITHUB CLI INTEGRATION
+.Bd -literal -offset indent
+github-token gh example-owner/example-repo -- pr create --fill
+.Ed
+.Pp
+The token is set as
+.Ev GH_TOKEN
+in the child process only,
+.Ev GITHUB_TOKEN
+is removed from the child so it cannot take precedence, and
+.Ev GH_REPO
+pins the child to the repository the token is scoped to.
+Arguments are passed individually and never through a shell.
+Nothing is written to
+.Pa hosts.yml ,
+.Cm gh auth login
+is never run, and the token disappears when the child exits.
+.Pp
+One token is minted before the child starts and is never renewed, so a child
+still running an hour later holds one GitHub no longer accepts.
+Long work belongs in a sequence of
+.Cm gh
+invocations rather than a single long-lived child.
+Git is unaffected, since it spawns the helper once per remote operation.
+.Pp
+The GitHub CLI is taken from
+.Ev GITHUB_TOKEN_BROKER_GH
+when set, and otherwise found as
+.Ql gh
+on
+.Ev PATH .
+The search skips this executable, so a deployment that puts the wrapper on
+.Ev PATH
+under the name
+.Ql gh
+does not make it launch itself.
+.\" -------------------------------------------------------------------------
+.Sh ENVIRONMENT
+.Bl -tag -width Ds
+.It Ev GITHUB_TOKEN_BROKER_ENDPOINT
+Required.
+Where the broker is, as
+.Ql unix:///absolute/path/to/broker.sock
+or
+.Ql http://host:port .
+Matches the socket or address the broker binds.
+A query or fragment is refused.
+.It Ev GITHUB_TOKEN_BROKER_CREDENTIAL_FILE
+Path to a file holding the shared credential an
+.Ql http://
+endpoint requires.
+A trailing newline is stripped.
+Preferred over the variable below, since a file carries ownership and a mode
+while an environment variable is visible to anything that can read this
+process's environment.
+.It Ev GITHUB_TOKEN_BROKER_CREDENTIAL
+The credential itself, when a file is impractical.
+Ignored when the file variable is set.
+.It Ev GITHUB_TOKEN_BROKER_GH
+Absolute path to the real GitHub CLI, when it should not be searched for.
+.El
+.Pp
+An
+.Ql http://
+endpoint requires one of the two credential variables.
+A
+.Ql unix://
+endpoint takes neither, since filesystem permissions on the socket are the
+authorization.
+.\" -------------------------------------------------------------------------
+.Sh EXIT STATUS
+Following the conventional
+.In sysexits.h
+values, so a caller can tell an operator mistake from an outage.
+.Bl -tag -width "64" -compact
+.It Sy 0
+Success.
+.It Sy 64
+The command line or the environment was wrong.
+.It Sy 69
+The broker could not be reached, or did not answer within 20 seconds.
+.It Sy 70
+The broker answered but could not serve the request.
+Its log holds the reason; see DIAGNOSTICS in
+.Xr github-token-broker 8 .
+.It Sy 77
+The broker refused the repository, or rejected the client credential.
+The message says which.
+.It Sy 78
+The repository is allowlisted but the App installation does not grant it, so
+retrying cannot help.
+This is not the broker's own
+.Sy 78 ,
+which is a configuration document it refused at startup.
+.El
+.Pp
+.Cm gh
+instead returns the child's status verbatim, so a value here only ever reflects
+a failure that happened before the child started.
+.\" -------------------------------------------------------------------------
+.Sh EXAMPLES
+Confirm the broker will serve a repository, without minting anything:
+.Dl $ github-token check example-owner/example-repo
+.Pp
+Clone over HTTPS once the helper is configured:
+.Dl $ git clone https://github.com/example-owner/example-repo
+.Pp
+Open a pull request as the App:
+.Dl $ github-token gh example-owner/example-repo \-\- pr create \-\-fill
+.Pp
+Reach a broker on the host from inside a container.
+The credential is the same either way:
+.Bd -literal -offset indent
+export GITHUB_TOKEN_BROKER_CREDENTIAL_FILE=\e
+    /run/secrets/broker-credential
+.Ed
+.Pp
+The host's address is not.
+See
+.Ic listen.tcp.address
+in
+.Xr github-token-broker-config 5
+for what the broker will bind.
+.\"
+.Ss Docker on Linux
+The bridge gateway is the host itself, commonly
+.Ql 172.17.0.1 ;
+confirm with
+.Ql ip route show default
+inside the container, since a user-defined network uses another subnet.
+.Bd -literal -offset indent
+export GITHUB_TOKEN_BROKER_ENDPOINT=http://172.17.0.1:8765
+.Ed
+.Pp
+The broker binds that same address.
+A listener on
+.Ql 127.0.0.1
+is the host's own loopback and is not reachable across the bridge.
+.\"
+.Ss Docker Desktop on macOS
+Containers run in a virtual machine that forwards to the host, so the broker
+may stay on
+.Ql 127.0.0.1 .
+.Bd -literal -offset indent
+export GITHUB_TOKEN_BROKER_ENDPOINT=\e
+    http://host.docker.internal:8765
+.Ed
+.Pp
+.Ql 172.17.0.1
+is the container's default route here too and still reaches nothing, because
+that gateway is the virtual machine rather than the host.
+.\" -------------------------------------------------------------------------
+.Sh SEE ALSO
+.Xr gh 1 ,
+.Xr git-credential 1 ,
+.Xr github-token-broker-config 5 ,
+.Xr github-token-broker 8
+.\" -------------------------------------------------------------------------
+.Sh VERSION
+.Nm
+@VERSION@
+.\" -------------------------------------------------------------------------
+.Sh AUTHORS
+.An Knight Owl LLC
+.Pp
+.Lk https://github.com/knight-owl-dev/github-token-broker
+.\" -------------------------------------------------------------------------
+.Sh LICENSE
+MIT.
+See the
+.Pa LICENSE
+file in the distribution.

@@ -12,6 +12,24 @@ public static class BrokerExitCode
     /// <summary>The command line was wrong.</summary>
     public const int Usage = 64;
 
-    /// <summary>Configuration or the private key was missing or invalid.</summary>
+    /// <summary>
+    /// The private key was missing, unreadable, or not a usable RSA key.
+    /// </summary>
+    /// <remarks>
+    /// Its own status because it is the one startup failure an operator fixes
+    /// somewhere other than the configuration file.
+    /// </remarks>
+    public const int PrivateKey = 66;
+
+    /// <summary>
+    /// The socket was bound but could not be given its configured mode.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Configuration"/> because the configuration was
+    /// valid and the runtime failed.
+    /// </remarks>
+    public const int SocketMode = 71;
+
+    /// <summary>Configuration was missing or invalid, including a listener that could not bind.</summary>
     public const int Configuration = 78;
 }

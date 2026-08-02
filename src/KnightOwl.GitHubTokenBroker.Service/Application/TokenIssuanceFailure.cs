@@ -27,4 +27,10 @@ public enum TokenIssuanceFailure
 
     /// <summary>GitHub was unreachable, timed out, or returned an unexpected status.</summary>
     Unavailable = 7,
+
+    /// <summary>
+    /// The private key could not be loaded for this mint, although it loaded at
+    /// startup. The file has been replaced with something unusable.
+    /// </summary>
+    PrivateKeyUnusable = 8,
 }

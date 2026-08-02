@@ -11,9 +11,10 @@
 # Makefile syntax: NAME=value, unquoted. The command line outranks it.
 -include .env
 
-.PHONY: help restore build clean test publish integration-test \
+.PHONY: help restore build clean test publish integration-test man man-build \
 	lint lint-tools lint-fix lint-dotnet lint-dotnet-fix lint-shfmt lint-shfmt-fix \
-	lint-shellcheck lint-actions lint-markdown lint-spelling lint-docker lint-control-characters
+	lint-shellcheck lint-actions lint-markdown lint-spelling lint-docker lint-control-characters \
+	lint-mandoc
 
 .DEFAULT_GOAL := help
 
@@ -22,9 +23,13 @@ SHELL_SCRIPTS := $(shell find scripts tests \( -name '*.sh' -o -name '*.bats' \)
 
 DOCKERFILES := $(shell find tests -name 'Dockerfile*' -not -name '*.dockerignore' 2>/dev/null)
 
+# Linted as sources. Rendered and packaged from artifacts/man, where man-build
+# replaces their @VERSION@ placeholder.
+MAN_PAGES := $(shell find docs/man -type f -name '*.[0-9]' 2>/dev/null)
+
 # The linters ENV=container delegates, in the order a developer wants them.
 LINT_TOOL_TARGETS := lint-shfmt lint-shellcheck lint-actions \
-	lint-markdown lint-spelling lint-docker lint-control-characters
+	lint-markdown lint-spelling lint-docker lint-control-characters lint-mandoc
 
 # Always run here, whatever ENV says, because the image cannot run them. Move a
 # target between this and LINT_TOOL_TARGETS as the image changes.
@@ -84,6 +89,12 @@ publish: ## Publish native binaries for RID (default: this machine's)
 integration-test: ## Run the integration suite (ENV=host|container, ALL=1, CASES=)
 	@./tests/integration/run.sh --env $(ENV) $(if $(ALL),--all-images) \
 		$(foreach case,$(CASES),--case $(case))
+
+man-build: ## Stamp the man pages into artifacts/man
+	@./scripts/stamp-man-pages.sh
+
+man: man-build ## View a man page (NAME=github-token)
+	@./scripts/view-man-page.sh $(NAME)
 
 lint: $(filter-out $(SKIP),$(LINT_HOST_ONLY)) lint-tools ## Run all linters (ENV=host|container)
 
@@ -162,6 +173,13 @@ lint-docker: ## Lint the Dockerfiles
 lint-control-characters: ## Check for raw control characters in source
 	@echo "Checking for raw control characters..."
 	@./scripts/check-control-characters.sh
+	@echo "OK"
+
+# The sources, so this passes before anything is built. @VERSION@ is opaque to
+# mandoc either way.
+lint-mandoc: ## Check the man pages
+	@echo "Checking man pages (mandoc)..."
+	@./scripts/check-man-pages.sh $(MAN_PAGES)
 	@echo "OK"
 
 endif

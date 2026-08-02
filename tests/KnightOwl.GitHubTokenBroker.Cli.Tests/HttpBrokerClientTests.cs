@@ -4,6 +4,7 @@ using KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 using KnightOwl.GitHubTokenBroker.Domain.Repositories;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts.V1;
+using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 
 
 namespace KnightOwl.GitHubTokenBroker.Cli.Tests;
@@ -33,19 +34,23 @@ public sealed class HttpBrokerClientTests
         }
     }
 
+    private static readonly BrokerEndpoint Endpoint =
+        BrokerEndpoint.Parse("unix:///run/github-token-broker/broker.sock");
+
     private static HttpBrokerClient Client(StubHandler handler, string? credential = null)
         => new(
             new HttpClient(handler)
             {
-                BaseAddress = new Uri("http://localhost")
+                BaseAddress = Endpoint.BaseUri,
             },
+            Endpoint,
             credential
         );
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body)
         => new(status)
         {
-            Content = new StringContent(body, Encoding.UTF8, "application/json")
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
 
     [Fact]
@@ -64,7 +69,12 @@ public sealed class HttpBrokerClientTests
 
         Assert.Equal("ghs_x", response.Token);
         Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
-        Assert.EndsWith(BrokerV1Routes.TokenPath, handler.LastRequest.RequestUri!.AbsolutePath, StringComparison.Ordinal);
+        Assert.EndsWith(
+            BrokerV1Routes.TokenPath,
+            handler.LastRequest.RequestUri!.AbsolutePath,
+            StringComparison.Ordinal
+        );
+
         Assert.Contains("\"host\":\"github.com\"", handler.LastBody, StringComparison.Ordinal);
         Assert.Contains("\"repository\":\"example-owner/example-repo\"", handler.LastBody, StringComparison.Ordinal);
     }
@@ -83,7 +93,11 @@ public sealed class HttpBrokerClientTests
         var response = await client.CheckAsync(Repository, CancellationToken.None);
 
         Assert.Equal("contents:write", response.Permissions);
-        Assert.EndsWith(BrokerV1Routes.CheckPath, handler.LastRequest!.RequestUri!.AbsolutePath, StringComparison.Ordinal);
+        Assert.EndsWith(
+            BrokerV1Routes.CheckPath,
+            handler.LastRequest!.RequestUri!.AbsolutePath,
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -132,7 +146,9 @@ public sealed class HttpBrokerClientTests
         StubHandler handler = new(_ => Json(status, """{ "error": "no" }"""));
         using var client = Client(handler);
 
-        var failure = await Assert.ThrowsAsync<BrokerClientException>(() => client.RequestTokenAsync(Repository, CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<BrokerClientException>(()
+            => client.RequestTokenAsync(Repository, CancellationToken.None)
+        );
 
         Assert.Equal(expected, failure.Failure);
     }
@@ -143,7 +159,9 @@ public sealed class HttpBrokerClientTests
         StubHandler handler = new(_ => throw new HttpRequestException("no such socket"));
         using var client = Client(handler);
 
-        var failure = await Assert.ThrowsAsync<BrokerClientException>(() => client.RequestTokenAsync(Repository, CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<BrokerClientException>(()
+            => client.RequestTokenAsync(Repository, CancellationToken.None)
+        );
 
         Assert.Equal(BrokerClientFailure.Unavailable, failure.Failure);
     }
@@ -154,9 +172,39 @@ public sealed class HttpBrokerClientTests
         StubHandler handler = new(_ => throw new TaskCanceledException("timed out", new TimeoutException()));
         using var client = Client(handler);
 
-        var failure = await Assert.ThrowsAsync<BrokerClientException>(() => client.RequestTokenAsync(Repository, CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<BrokerClientException>(()
+            => client.RequestTokenAsync(Repository, CancellationToken.None)
+        );
 
         Assert.Equal(BrokerClientFailure.Unavailable, failure.Failure);
+    }
+
+    /// <remarks>
+    /// <see cref="Endpoint"/> is a socket, so its request authority is a
+    /// placeholder; the absence of that placeholder is the assertion.
+    /// </remarks>
+    [Fact]
+    public async Task NamesTheEndpointOnBothUnavailablePaths()
+    {
+        StubHandler unreachable = new(_ => throw new HttpRequestException("no route to host"));
+        using var toNothing = Client(unreachable);
+
+        var reach = await Assert.ThrowsAsync<BrokerClientException>(()
+            => toNothing.RequestTokenAsync(Repository, CancellationToken.None)
+        );
+
+        StubHandler slow = new(_ => throw new TaskCanceledException("timed out", new TimeoutException()));
+        using var toSilence = Client(slow);
+
+        var timeout = await Assert.ThrowsAsync<BrokerClientException>(()
+            => toSilence.RequestTokenAsync(Repository, CancellationToken.None)
+        );
+
+        foreach (var message in new[] { reach.Message, timeout.Message })
+        {
+            Assert.Contains(Endpoint.UnixSocketPath!, message, StringComparison.Ordinal);
+            Assert.DoesNotContain("localhost", message, StringComparison.Ordinal);
+        }
     }
 
     [Theory]
@@ -167,7 +215,9 @@ public sealed class HttpBrokerClientTests
         StubHandler handler = new(_ => Json(HttpStatusCode.OK, body));
         using var client = Client(handler);
 
-        var failure = await Assert.ThrowsAsync<BrokerClientException>(() => client.RequestTokenAsync(Repository, CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<BrokerClientException>(()
+            => client.RequestTokenAsync(Repository, CancellationToken.None)
+        );
 
         Assert.Equal(BrokerClientFailure.Failed, failure.Failure);
     }
@@ -181,6 +231,8 @@ public sealed class HttpBrokerClientTests
         StubHandler handler = new(_ => throw new TaskCanceledException("canceled"));
         using var client = Client(handler);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.RequestTokenAsync(Repository, canceled.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(()
+            => client.RequestTokenAsync(Repository, canceled.Token)
+        );
     }
 }

@@ -123,7 +123,8 @@ public sealed class GitHubCliRunnerTests : IDisposable
     [Theory]
     [InlineData(BrokerClientFailure.Refused, CliExitCode.NotAuthorized)]
     [InlineData(BrokerClientFailure.Unavailable, CliExitCode.Unavailable)]
-    [InlineData(BrokerClientFailure.Unauthenticated, CliExitCode.Internal)]
+    [InlineData(BrokerClientFailure.Unauthenticated, CliExitCode.NotAuthorized)]
+    [InlineData(BrokerClientFailure.Misconfigured, CliExitCode.Configuration)]
     [InlineData(BrokerClientFailure.Failed, CliExitCode.Internal)]
     public async Task NeverStartsTheChildWithoutAToken(BrokerClientFailure failure, int expectedExitCode)
     {

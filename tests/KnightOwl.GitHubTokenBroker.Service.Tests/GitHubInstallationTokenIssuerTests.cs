@@ -52,7 +52,9 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
             }
         );
 
-    private (IInstallationTokenIssuer Issuer, StubHttpMessageHandler Handler) Build(Func<HttpRequestMessage, string, HttpResponseMessage> respond)
+    private (IInstallationTokenIssuer Issuer, StubHttpMessageHandler Handler) Build(
+        Func<HttpRequestMessage, string, HttpResponseMessage> respond
+    )
     {
         StubHttpMessageHandler handler = new(respond);
         HttpClient client = new(handler)
@@ -175,9 +177,42 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
     {
         var (issuer, _) = Build((_, _) => Json(status, "{}"));
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(expected, failure.Failure);
+    }
+
+    [Fact]
+    public async Task ReportsAnUnusableKeyWithoutCallingGitHub()
+    {
+        StubHttpMessageHandler handler = new((_, _) => Json(HttpStatusCode.OK, SuccessBody()));
+        using HttpClient client = new(handler);
+
+        client.BaseAddress = new Uri("https://api.github.com/");
+
+        GitHubInstallationTokenIssuer issuer = new(
+            client,
+            new AppJwtFactory(new UnreadablePrivateKeySource(), new TestTimeProvider(Now), 123456),
+            new TestTimeProvider(Now),
+            InstallationId,
+            NullLogger<GitHubInstallationTokenIssuer>.Instance
+        );
+
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
+
+        Assert.Equal(TokenIssuanceFailure.PrivateKeyUnusable, failure.Failure);
+
+        // The handler answers a valid token, so an empty list is the request never
+        // being made rather than the response being rejected.
+        Assert.Empty(handler.Requests);
     }
 
     [Fact]
@@ -189,7 +224,11 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
             )
         );
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(TokenIssuanceFailure.Unavailable, failure.Failure);
     }
@@ -199,7 +238,11 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
     {
         var (issuer, _) = Build((_, _) => throw new HttpRequestException("connection refused"));
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(TokenIssuanceFailure.Unavailable, failure.Failure);
     }
@@ -214,13 +257,19 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
     [InlineData("{ not json")]
     [InlineData("""{ "expires_at": "2026-07-31T13:00:00Z", "repository_selection": "selected" }""")]
     [InlineData("""{ "token": "t", "repository_selection": "selected" }""")]
-    [InlineData("""{ "token": "t", "expires_at": "2020-01-01T00:00:00Z", "repository_selection": "selected", "permissions": {}, "repositories": [] }""")]
+    [InlineData(
+        """{ "token": "t", "expires_at": "2020-01-01T00:00:00Z", "repository_selection": "selected", "permissions": {}, "repositories": [] }"""
+    )]
     [InlineData("null")]
     public async Task RefusesAnUnusableResponse(string body)
     {
         var (issuer, _) = Build((_, _) => Json(HttpStatusCode.Created, body));
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(TokenIssuanceFailure.UntrustworthyResponse, failure.Failure);
     }
@@ -240,7 +289,11 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
     {
         var (issuer, _) = Build((_, _) => Json(HttpStatusCode.Created, SuccessBody(token: token)));
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(TokenIssuanceFailure.UntrustworthyResponse, failure.Failure);
     }
@@ -261,7 +314,11 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
     {
         var (issuer, _) = Build((_, _) => Json(HttpStatusCode.Created, SuccessBody(repositorySelection: "all")));
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(TokenIssuanceFailure.UntrustworthyResponse, failure.Failure);
     }
@@ -275,7 +332,11 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
             )
         );
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(TokenIssuanceFailure.UntrustworthyResponse, failure.Failure);
     }
@@ -328,7 +389,11 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
 
         var (issuer, _) = Build((_, _) => Json(HttpStatusCode.Created, body));
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(TokenIssuanceFailure.UntrustworthyResponse, failure.Failure);
     }
@@ -351,7 +416,11 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
             )
         );
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         Assert.Equal(TokenIssuanceFailure.UntrustworthyResponse, failure.Failure);
     }
@@ -406,7 +475,11 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
     {
         var (issuer, handler) = Build((_, _) => Json(HttpStatusCode.Unauthorized, "{}"));
 
-        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(TestPolicies.Policy(), CancellationToken.None));
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
 
         var jwt = handler.Requests[0].Headers.Authorization!.Parameter!;
         Assert.DoesNotContain(jwt, failure.Message, StringComparison.Ordinal);
@@ -420,6 +493,10 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
 
         var (issuer, _) = Build((_, _) => throw new TaskCanceledException("canceled"));
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => issuer.IssueAsync(TestPolicies.Policy(), canceled.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                canceled.Token
+            )
+        );
     }
 }

@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using KnightOwl.GitHubTokenBroker.Domain.Access;
 using KnightOwl.GitHubTokenBroker.Domain.Permissions;
+using KnightOwl.GitHubTokenBroker.Infrastructure.Configuration;
 using KnightOwl.GitHubTokenBroker.Infrastructure.GitHub;
 using KnightOwl.GitHubTokenBroker.Service.Application;
 using KnightOwl.GitHubTokenBroker.Service.Application.Ports;
@@ -70,7 +71,21 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
     {
         ArgumentNullException.ThrowIfNull(policy);
 
-        var jwt = _appJwtFactory.Create();
+        AppJwt jwt;
+        try
+        {
+            jwt = _appJwtFactory.Create();
+        }
+        catch (ConfigurationException exception)
+        {
+            // Classified rather than left to escape, which would answer a bare 500
+            // with nothing in the log naming the key.
+            throw new TokenIssuanceException(
+                TokenIssuanceFailure.PrivateKeyUnusable,
+                "the private key could not be loaded for this mint",
+                exception
+            );
+        }
 
         using HttpRequestMessage request = new(
             HttpMethod.Post,

@@ -1,0 +1,440 @@
+.Dd August 2, 2026
+.Dt GITHUB-TOKEN-BROKER 8
+.Os
+.\" -------------------------------------------------------------------------
+.Sh NAME
+.Nm github-token-broker
+.Nd mint short-lived, repository-scoped GitHub App installation tokens
+.\" -------------------------------------------------------------------------
+.Sh SYNOPSIS
+.Nm
+.Fl -config Ar path
+.\" -------------------------------------------------------------------------
+.Sh DESCRIPTION
+.Nm
+is a local service that mints GitHub App installation tokens on demand.
+Each token is restricted to one repository, expires within the hour, and is
+attributed to the App rather than to a person.
+.Pp
+It replaces the personal access token that automation otherwise ends up
+holding: long-lived, broadly scoped, and attributed to a human.
+.Pp
+Only this process reads the App private key, signs a JWT, or calls GitHub.
+.Pp
+That separates duties.
+It is
+.Em not
+an isolation boundary: anything that can reach the endpoint can obtain a token
+for any allowlisted repository.
+Restricting who can reach it is the deployment's job, and depends on which
+transport is configured.
+.Pp
+The only argument is the configuration path, which must be absolute:
+.Bl -tag -width Ds
+.It Fl -config Ar path
+Absolute path to the JSON configuration document described in
+.Xr github-token-broker-config 5 .
+.El
+.Pp
+There is no
+.Fl -version
+or
+.Fl -help ;
+either exits 64 with the usage line.
+.Pp
+The process runs in the foreground.
+It shuts down gracefully on
+.Dv SIGINT
+and
+.Dv SIGTERM .
+Changing configuration requires a restart.
+.\" -------------------------------------------------------------------------
+.Sh DEPLOYMENT
+The broker runs on the host, not in a container.
+It holds the App private key, and a container's image and memory are readable
+by anyone who can run the runtime, which puts the key within reach of every
+workload on that daemon.
+.Pp
+Clients in containers reach the host over TCP; see
+.Xr github-token-broker-config 5 .
+.Pp
+Run it as a dedicated account that does nothing else.
+That account owns the private key, mode
+.Ql 0400 ,
+and the socket directory.
+.\" -------------------------------------------------------------------------
+.Sh LOGGING
+Two streams, split by whether the broker went on to serve.
+.Pp
+Standard error carries the one fatal startup failure and nothing else:
+.Bd -literal -offset indent
+private key error: The private key could not be read from
+"/etc/github-token-broker/app.pem".
+  Could not find a part of the path
+  '/etc/github-token-broker/app.pem'.
+.Ed
+.Pp
+Standard output carries every log line thereafter:
+.Bd -literal -offset indent
+info: github-token-broker[3000]
+      Broker ready for app 123456 installation 789012
+      with 2 allowlisted repositories
+.Ed
+.Pp
+A service manager wanting one record captures both.
+.Pp
+The level is
+.Ql Information ,
+raised or lowered through
+.Ev Logging__LogLevel__Default ,
+which takes
+.Ql Trace ,
+.Ql Debug ,
+.Ql Information ,
+.Ql Warning ,
+.Ql Error ,
+or
+.Ql Critical .
+.Pp
+No log line ever contains a token, a JWT, or key material.
+.\" -------------------------------------------------------------------------
+.Sh API
+Requests are HTTP over whichever transports
+.Ic listen
+configures.
+.Bl -tag -width Ds
+.It Ic GET /health
+Liveness, and the number of repositories in the allowlist.
+Never mints.
+.It Ic POST /v1/token
+Returns a cached or freshly minted token.
+.It Ic POST /v1/check
+Confirms authorization without minting, returning the repository and its
+canonical permission ceiling.
+.El
+.Pp
+Both
+.Ic POST
+routes take:
+.Bd -literal -offset indent
+{"host": "github.com", "repository": "OWNER/REPOSITORY"}
+.Ed
+.Pp
+.Ic /v1/token
+answers:
+.Bd -literal -offset indent
+{"token": "...", "expires_at": "2026-08-02T12:00:00Z"}
+.Ed
+.Pp
+.Ic /health
+answers:
+.Bd -literal -offset indent
+{"status": "ok", "repositories": 2}
+.Ed
+.Pp
+Requests are bounded: only the declared method per route, only
+.Ql application/json ,
+at most 4096 bytes, and a JSON depth of 8.
+.Pp
+Every refusal is one status and one message, so error text cannot be used to
+probe the allowlist.
+The precise reason goes to the log instead.
+.Pp
+On the TCP transport every route requires the client credential in the
+.Ql X-GitHub-Token-Broker-Credential
+header, including
+.Ic /health .
+A uniform rule has no carve-out to get wrong, and a client that can reach the
+endpoint already holds the credential.
+Requests arriving on the Unix socket are not asked for one.
+.\" -------------------------------------------------------------------------
+.Sh TRANSPORTS
+Which transport to configure, and what each costs, is in
+.Xr github-token-broker-config 5 .
+What follows is what the broker does with them at startup.
+.\"
+.Ss The socket directory
+Traversal of the directory holding the socket is the outer half of the socket's
+authorization, and it also covers the moment between binding and the mode being
+applied to the socket itself.
+.Pp
+When the directory does not exist, the broker creates it
+.Ql 0700 .
+When it already exists and is writable beyond its owner, the broker refuses to
+start
+.Em unless
+the sticky bit is set.
+Write permission on the directory is the right to unlink the socket and bind
+another in its place, so a narrow mode on the socket alone would not be enough.
+The sticky bit is what makes a shared directory such as
+.Pa /tmp
+safe: everyone may create, only the owner may unlink.
+Traversal for a group stays available through
+.Ql 0750 .
+.\"
+.Ss The socket mode
+The mode is applied by the broker rather than left to the process umask.
+Connecting needs write permission on the socket file, so a umask would decide
+who may mint.
+.\"
+.Ss \&An occupied path
+Binding fails if the socket path is occupied, and nothing is removed to free it.
+A socket left by an unclean shutdown reads the same as a mistyped path naming a
+real file, and removing the wrong one destroys whatever it named.
+.Bd -literal -offset indent
+$ github-token-broker --config /etc/github-token-broker/config.json
+configuration error: Another process is already listening on
+"/run/github-token-broker/broker.sock".
+.Ed
+.Pp
+A path that is a directory or a symbolic link is refused outright.
+Clearing an orphan belongs to the operator or the service manager; systemd's
+.Ql RuntimeDirectory=
+recreates the directory empty on every start.
+.\" -------------------------------------------------------------------------
+.Sh TOKEN MINTING
+An RS256 JWT is signed with
+.Ql iat
+backdated 60 seconds, so a host clock running slightly ahead of GitHub's does
+not have its tokens rejected as issued in the future.
+It stays in memory and is never returned through the API.
+.Pp
+The broker then calls
+.Ql POST /app/installations/{id}/access_tokens
+with exactly one repository name and exactly the configured permission map.
+The repository is sent without its owner, since the installation implies it.
+.Pp
+A response is refused unless it proves the narrowing held:
+.Bl -bullet -compact
+.It
+a usable token,
+.It
+an expiry in the future,
+.It
+a
+.Ql repository_selection
+of
+.Ql selected ,
+.It
+exactly one repository, matching the request,
+.It
+no permission beyond the configured ceiling, allowing for the standing
+.Ql metadata: read
+noted in
+.Xr github-token-broker-config 5 .
+.El
+.Pp
+Token values are treated as opaque: no prefix, format, or length is assumed.
+.\"
+.Ss Key rotation
+Generate a new key in the App settings, replace the file, confirm a mint
+succeeds, then delete the old key at GitHub.
+No restart is needed, since the key is re-read on every mint.
+.\" -------------------------------------------------------------------------
+.Sh CACHE
+In memory only, keyed by normalized repository
+.Em and
+effective permissions, so narrowing a ceiling cannot silently reuse a token
+minted under a broader one.
+.Pp
+A token is reused only while more than
+.Ic token_refresh_margin_seconds
+remains before expiry.
+There is no refresh loop: a token is minted by the first request that finds none
+fresh enough.
+.Pp
+Concurrent misses for one key are coalesced onto a single mint.
+A failed mint clears its entry, so it fails only the callers already waiting on
+it and never poisons a later request.
+.\" -------------------------------------------------------------------------
+.Sh EXIT STATUS
+Following the conventional
+.In sysexits.h
+values, so a service manager can distinguish an operator mistake from a runtime
+fault.
+.Bl -tag -width "64" -compact
+.It Sy 0
+Shut down normally.
+.It Sy 64
+The command line was wrong.
+.It Sy 66
+The private key could not be read or parsed.
+.It Sy 71
+The socket was bound but its mode could not be applied.
+.It Sy 78
+Configuration was missing or invalid, including a listener that could not bind.
+.El
+.Pp
+All of these happen before the broker serves a request, so restarting on
+failure retries a condition that has not changed.
+The key has its own status because it is the one fixed somewhere other than the
+configuration file.
+.\" -------------------------------------------------------------------------
+.Sh EXAMPLES
+Run against a configuration file:
+.Dl $ github-token-broker --config /etc/github-token-broker/config.json
+.Pp
+Confirm it is serving, over a Unix socket.
+The host in the URL is never resolved, since the socket determines the peer:
+.Bd -literal -offset indent
+$ curl --unix-socket /run/github-token-broker/broker.sock \e
+    http://localhost/health
+{"status":"ok","repositories":2}
+.Ed
+.Pp
+Over TCP the credential is required, including here:
+.Bd -literal -offset indent
+$ CRED=$(cat /etc/github-token-broker/client-credential)
+$ curl -H "X-GitHub-Token-Broker-Credential: $CRED" \e
+    http://127.0.0.1:8765/health
+.Ed
+.\" -------------------------------------------------------------------------
+.Sh DIAGNOSTICS
+Mint failures are classified, because the class decides what happens next and
+what an operator should check.
+.Bl -tag -width Ds
+.It Ic AppUnauthorized
+GitHub answered
+.Sy 401 :
+wrong key, clock skew, or a rotated key.
+The whole cache is dropped, since every cached grant was minted with the
+credential GitHub just rejected.
+The client sees
+.Sy 503 .
+.It Ic InstallationForbidden
+GitHub answered
+.Sy 403 ;
+the installation is suspended.
+The client sees
+.Sy 409 .
+.It Ic InstallationOrRepositoryMissing
+GitHub answered
+.Sy 404 ;
+the installation or the repository is gone.
+The client sees
+.Sy 409 .
+.It Ic PermissionDrift
+GitHub answered
+.Sy 422 ;
+configuration asks for more than the App grants.
+The client sees
+.Sy 500 .
+.It Ic UntrustworthyResponse
+The response could not be proven narrow.
+The client sees
+.Sy 500 .
+.It Ic PrivateKeyUnusable
+The key was readable at startup and is not now, which is a rotation caught
+mid-flight.
+The client sees
+.Sy 500 .
+.It Ic Unavailable
+Transport failure, an unexpected status, or GitHub not answering within 15
+seconds.
+Retried on the next request.
+The client sees
+.Sy 503 .
+.El
+.Pp
+The two installation failures answer
+.Sy 409
+rather than
+.Sy 503
+because both persist until an operator changes something.
+A client that would retry an outage is told to look at the App installation
+instead.
+.Pp
+A failed mint always drops whatever that grant had cached, since a token is only
+minted once the cached one is no longer fresh enough to serve.
+.\"
+.Ss Reading back from a client exit status
+.Xr github-token 1
+reports a status rather than the HTTP one.
+To reach the classes above from what a script saw:
+.Bl -tag -width "78" -compact
+.It Sy 69
+The broker was never reached, so nothing here applies.
+Check that it is running and that the endpoint matches what it binds.
+.It Sy 70
+.Sy 500 :
+.Ic PermissionDrift ,
+.Ic UntrustworthyResponse ,
+or
+.Ic PrivateKeyUnusable .
+Also
+.Sy 503 ,
+which is
+.Ic AppUnauthorized
+or
+.Ic Unavailable .
+.It Sy 77
+Refused before any mint was attempted, so no class was reached.
+The repository is absent from the allowlist, or the client credential was
+rejected.
+.It Sy 78
+.Sy 409 :
+.Ic InstallationForbidden
+or
+.Ic InstallationOrRepositoryMissing .
+.El
+.Pp
+Only the log distinguishes the classes sharing a status.
+.\" -------------------------------------------------------------------------
+.Sh SEE ALSO
+.Xr github-token 1 ,
+.Xr github-token-broker-config 5
+.\" -------------------------------------------------------------------------
+.Sh VERSION
+.Nm
+@VERSION@
+.\" -------------------------------------------------------------------------
+.Sh AUTHORS
+.An Knight Owl LLC
+.Pp
+.Lk https://github.com/knight-owl-dev/github-token-broker
+.\" -------------------------------------------------------------------------
+.Sh LICENSE
+MIT.
+See the
+.Pa LICENSE
+file in the distribution.
+.\" -------------------------------------------------------------------------
+.Sh SECURITY CONSIDERATIONS
+Register a private App owned by the account that owns the target repositories.
+Leave webhooks inactive, request no user authorization, and install it on
+.Em only select repositories .
+.Pp
+Grant no more than the work requires.
+.Ql contents: write ,
+.Ql pull_requests: write ,
+and read on
+.Ql actions ,
+.Ql checks ,
+and
+.Ql statuses
+covers branch pushes and pull requests.
+Leave workflow, administration, secrets, and environment permissions off.
+.Pp
+Naming
+.Ql metadata: read
+is optional, and worth doing so the ceiling matches what a token carries.
+The names and levels this map accepts are in
+.Xr github-token-broker-config 5 .
+.Pp
+Protect each default branch with a ruleset that requires pull requests, blocks
+force pushes and deletion, and does
+.Em not
+list the App as a bypass.
+App permissions govern what the API allows; branch rules govern what may reach a
+protected branch.
+Both layers are needed.
+.Pp
+An App installed on one account grants no access to another's repositories, even
+when the App owner is a collaborator there.
+Forking each target repository into the account that owns the App is the setup
+this design assumes.
+Creating a pull request requires
+.Ql pull_requests: write
+on the
+.Em base
+repository, so a token scoped to a fork cannot open one against an upstream.

@@ -168,15 +168,19 @@ public sealed class CredentialHelperTests
     }
 
     [Theory]
-    [InlineData(BrokerClientFailure.Unauthenticated)]
-    [InlineData(BrokerClientFailure.Failed)]
-    public async Task FailsLoudlyForOtherBrokerFailures(BrokerClientFailure failure)
+    [InlineData(BrokerClientFailure.Unauthenticated, CliExitCode.NotAuthorized)]
+    [InlineData(BrokerClientFailure.Misconfigured, CliExitCode.Configuration)]
+    [InlineData(BrokerClientFailure.Failed, CliExitCode.Internal)]
+    public async Task FailsLoudlyForOtherBrokerFailures(
+        BrokerClientFailure failure,
+        int expectedExitCode
+    )
     {
         var broker = StubBrokerClient.Failing(failure);
 
         var (exitCode, output, error) = await RunAsync(broker, AllowlistedRequest);
 
-        Assert.Equal(CliExitCode.Internal, exitCode);
+        Assert.Equal(expectedExitCode, exitCode);
         Assert.Empty(output);
         Assert.NotEmpty(error);
     }

@@ -55,13 +55,7 @@ public sealed class AuthorizationCheck
         catch (BrokerClientException exception)
         {
             await DiagnosticReport.WriteAsync(_error, Globals.AppName, exception);
-            return exception.Failure switch
-            {
-                BrokerClientFailure.Unavailable => CliExitCode.Unavailable,
-                BrokerClientFailure.Refused => CliExitCode.NotAuthorized,
-                BrokerClientFailure.Misconfigured => CliExitCode.Configuration,
-                _ => CliExitCode.Internal,
-            };
+            return exception.Failure.ExitCode;
         }
     }
 }
