@@ -128,31 +128,11 @@ public sealed class BrokerConfiguration
 
     private static BrokerConfiguration Validate(ConfigurationDocument document)
     {
-        if (!IdentityValidator.TryValidate(document, out var identity, out var error))
-        {
-            throw new ConfigurationException(error);
-        }
-
-        if (!ApiUrlValidator.TryValidate(document.ApiUrl, out var apiBaseUri, out error))
-        {
-            throw new ConfigurationException(error);
-        }
-
-        if (!RefreshMarginValidator.TryValidate(
-                document.TokenRefreshMarginSeconds,
-                out var refreshMargin,
-                out error
-            ))
-        {
-            throw new ConfigurationException(error);
-        }
-
-        if (!ListenValidator.TryValidate(document.Listen, out var listen, out error))
-        {
-            throw new ConfigurationException(error);
-        }
-
-        if (!AllowlistValidator.TryValidate(document.Repositories, out var allowlist, out error))
+        if (!IdentityValidator.TryValidate(document, out var identity, out var error)
+            || !ApiUrlValidator.TryValidate(document.ApiUrl, out var apiBaseUri, out error)
+            || !RefreshMarginValidator.TryValidate(document.TokenRefreshMarginSeconds, out var refreshMargin, out error)
+            || !ListenValidator.TryValidate(document.Listen, out var listen, out error)
+            || !AllowlistValidator.TryValidate(document.Repositories, out var allowlist, out error))
         {
             throw new ConfigurationException(error);
         }
