@@ -31,7 +31,7 @@ public sealed class BrokerConfiguration
         GitHubHost host,
         Uri apiBaseUri,
         long appId,
-        long installationId,
+        InstallationId defaultInstallation,
         string privateKeyPath,
         TimeSpan refreshMargin,
         ListenOptions listen,
@@ -41,7 +41,7 @@ public sealed class BrokerConfiguration
         this.Host = host;
         this.ApiBaseUri = apiBaseUri;
         this.AppId = appId;
-        this.InstallationId = installationId;
+        this.DefaultInstallation = defaultInstallation;
         this.PrivateKeyPath = privateKeyPath;
         this.RefreshMargin = refreshMargin;
         this.Listen = listen;
@@ -57,8 +57,11 @@ public sealed class BrokerConfiguration
     /// <summary>The GitHub App identity used as the JWT issuer.</summary>
     public long AppId { get; }
 
-    /// <summary>The installation whose tokens this broker mints.</summary>
-    public long InstallationId { get; }
+    /// <summary>
+    /// The installation an allowlist entry is minted against when it names none
+    /// of its own.
+    /// </summary>
+    public InstallationId DefaultInstallation { get; }
 
     /// <summary>Absolute path to the App private key, read only by the broker.</summary>
     public string PrivateKeyPath { get; }
@@ -132,7 +135,12 @@ public sealed class BrokerConfiguration
             || !ApiUrlValidator.TryValidate(document.ApiUrl, out var apiBaseUri, out error)
             || !RefreshMarginValidator.TryValidate(document.TokenRefreshMarginSeconds, out var refreshMargin, out error)
             || !ListenValidator.TryValidate(document.Listen, out var listen, out error)
-            || !AllowlistValidator.TryValidate(document.Repositories, out var allowlist, out error))
+            || !AllowlistValidator.TryValidate(
+                document.Repositories,
+                identity.Installation,
+                out var allowlist,
+                out error
+            ))
         {
             throw new ConfigurationException(error);
         }
@@ -141,7 +149,7 @@ public sealed class BrokerConfiguration
             identity.Host,
             apiBaseUri,
             identity.AppId,
-            identity.InstallationId,
+            identity.Installation,
             identity.PrivateKeyPath,
             refreshMargin,
             listen,

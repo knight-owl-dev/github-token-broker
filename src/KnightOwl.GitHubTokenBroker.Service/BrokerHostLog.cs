@@ -9,13 +9,13 @@ internal static partial class BrokerHostLog
     [LoggerMessage(
         EventId = 3000,
         Level = LogLevel.Information,
-        Message = "Broker ready for app {AppId} installation {InstallationId} with {Repositories} allowlisted repositories"
+        Message = "Broker ready for app {AppId} with {Repositories} allowlisted repositories across {Installations} installations"
     )]
     public static partial void Ready(
         ILogger logger,
         long appId,
-        long installationId,
-        int repositories
+        int repositories,
+        int installations
     );
 
     [LoggerMessage(

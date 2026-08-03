@@ -40,6 +40,11 @@ Required.
 Which installation of that App to mint against, the number at the end of the
 installation's settings URL.
 Must be positive.
+An entry under
+.Ic repositories
+may name a different one; this is what the rest take.
+See
+.Sx Installations .
 .It Ic private_key_path
 Required.
 Absolute path to the App's PEM private key.
@@ -158,9 +163,39 @@ in
 is refused at any level, with a diagnostic distinct from an unsupported name:
 authority over workflow files is outside this design.
 .Pp
-Narrowing an entry takes effect on the next mint rather than the next restart,
-since the cache is keyed by the effective permissions as well as by the
-repository.
+Narrowing an entry takes effect on the next mint rather than the next restart.
+See CACHE in
+.Xr github-token-broker 8 .
+.\"
+.Ss Installations
+An entry may carry its own
+.Ic installation_id ,
+which is how a repository outside the App owner's account is served: its owner
+installs the same App, and that installation's number goes here.
+The top-level value serves every entry that omits one.
+.Bd -literal -offset indent
+{
+  "installation_id": 789012,
+  "repositories": {
+    "example-owner/example-repo": {
+      "permissions": { "contents": "write" }
+    },
+    "other-owner/their-repo": {
+      "installation_id": 345678,
+      "permissions": { "contents": "write", "pull_requests": "write" }
+    }
+  }
+}
+.Ed
+.Pp
+One App and one private key throughout: an installation is an address, and the
+key is the credential that addresses it.
+A rejected App JWT therefore still discards every cached grant.
+.Pp
+Whether an installation covers the repository listed against it is settled at
+the first mint, the broker reaching GitHub for nothing else.
+A mismatch answers as a missing installation; see
+.Xr github-token-broker 8 .
 .\" -------------------------------------------------------------------------
 .Sh LISTEN
 .Ic listen

@@ -12,7 +12,8 @@ namespace KnightOwl.GitHubTokenBroker.Service.Tests;
 
 public sealed class GitHubInstallationTokenIssuerTests : IDisposable
 {
-    private const long InstallationId = 789012;
+    /// <summary>What <see cref="TestPolicies.Policy"/> mints against unless told otherwise.</summary>
+    private const long InstallationId = TestPolicies.DefaultInstallation;
 
     private static readonly DateTimeOffset Now = new(2026, 7, 31, 12, 0, 0, TimeSpan.Zero);
 
@@ -66,7 +67,6 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
             client,
             new AppJwtFactory(new StubPrivateKeySource(_key), new TestTimeProvider(Now), 123456),
             new TestTimeProvider(Now),
-            InstallationId,
             NullLogger<GitHubInstallationTokenIssuer>.Instance
         );
 
@@ -80,6 +80,25 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
         };
 
     [Fact]
+    public async Task MintsAgainstThePolicysOwnInstallation()
+    {
+        const long overridden = 345678;
+
+        var (issuer, handler) =
+            Build((_, _) => Json(HttpStatusCode.Created, SuccessBody()));
+
+        await issuer.IssueAsync(
+            TestPolicies.PolicyIn(overridden),
+            CancellationToken.None
+        );
+
+        Assert.Equal(
+            $"https://api.github.com/app/installations/{overridden}/access_tokens",
+            Assert.Single(handler.Requests).RequestUri!.AbsoluteUri
+        );
+    }
+
+    [Fact]
     public async Task SendsExactlyOneRepositoryByBareNameAndTheConfiguredPermissions()
     {
         var (issuer, handler) =
@@ -89,6 +108,9 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
 
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Post, request.Method);
+
+        // Paired with MintsAgainstThePolicysOwnInstallation, which expects a different
+        // number: a route ignoring the policy would satisfy this assertion alone.
         Assert.Equal(
             $"https://api.github.com/app/installations/{InstallationId}/access_tokens",
             request.RequestUri!.AbsoluteUri
@@ -211,7 +233,6 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
             client,
             new AppJwtFactory(new UnreadablePrivateKeySource(), new TestTimeProvider(Now), 123456),
             new TestTimeProvider(Now),
-            InstallationId,
             NullLogger<GitHubInstallationTokenIssuer>.Instance
         );
 

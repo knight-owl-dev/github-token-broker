@@ -64,8 +64,8 @@ if (await app.StartServingAsync(configuration.Listen) is { } listenerFailure)
 BrokerHostLog.Ready(
     app.Logger,
     configuration.AppId,
-    configuration.InstallationId,
-    configuration.Allowlist.Count
+    configuration.Allowlist.Count,
+    configuration.Allowlist.InstallationCount
 );
 
 try

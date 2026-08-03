@@ -34,14 +34,27 @@ internal static class IdentityValidator
             return false;
         }
 
-        if (!TryPositiveId(document.AppId, "app_id", out var appId, out error)
-            || !TryPositiveId(
-                document.InstallationId,
-                "installation_id",
-                out var installationId,
-                out error
-            ))
+        if (document.AppId is not { } appId)
         {
+            error = "The app_id value is required.";
+            return false;
+        }
+
+        if (appId <= 0)
+        {
+            error = "The app_id value must be a positive number.";
+            return false;
+        }
+
+        if (document.InstallationId is not { } configured)
+        {
+            error = "The installation_id value is required.";
+            return false;
+        }
+
+        if (!InstallationId.TryCreate(configured, out var installation, out var installationError))
+        {
+            error = $"The installation_id value {installationError}.";
             return false;
         }
 
@@ -57,33 +70,7 @@ internal static class IdentityValidator
             return false;
         }
 
-        identity = new BrokerIdentity(host, appId, installationId, privateKeyPath);
-        error = null;
-        return true;
-    }
-
-    private static bool TryPositiveId(
-        long? configured,
-        string field,
-        out long id,
-        [NotNullWhen(false)] out string? error
-    )
-    {
-        id = 0;
-
-        if (configured is not { } value)
-        {
-            error = $"The {field} value is required.";
-            return false;
-        }
-
-        if (value <= 0)
-        {
-            error = $"The {field} value must be a positive number.";
-            return false;
-        }
-
-        id = value;
+        identity = new BrokerIdentity(host, appId, installation, privateKeyPath);
         error = null;
         return true;
     }

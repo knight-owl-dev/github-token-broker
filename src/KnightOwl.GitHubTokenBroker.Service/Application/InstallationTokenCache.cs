@@ -7,8 +7,8 @@ namespace KnightOwl.GitHubTokenBroker.Service.Application;
 
 /// <summary>
 /// In-memory grant cache. Entries are keyed by
-/// <see cref="RepositoryAccessPolicy.GrantKey"/>, so a repository and its
-/// effective permissions must both match before a token is reused.
+/// <see cref="RepositoryAccessPolicy.GrantKey"/>, so everything that key binds
+/// must match before a token is reused.
 /// </summary>
 /// <remarks>
 /// There is no refresh loop: a token is minted on the first request that finds

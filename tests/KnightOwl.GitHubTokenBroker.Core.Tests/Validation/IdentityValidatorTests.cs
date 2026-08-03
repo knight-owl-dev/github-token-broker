@@ -14,7 +14,7 @@ public sealed class IdentityValidatorTests
 
         Assert.Equal(GitHubHost.GitHubCom, identity.Host);
         Assert.Equal(123456, identity.AppId);
-        Assert.Equal(789012, identity.InstallationId);
+        Assert.Equal(789012, identity.Installation.Value);
         Assert.Equal("/keys/app.pem", identity.PrivateKeyPath);
     }
 

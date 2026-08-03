@@ -27,10 +27,21 @@ trap 'broker_stop; fixture_github_stop; rm -rf "${WORK}"' EXIT
 TOKEN="ghs-integration-token"
 fixture_key "${WORK}/app.pem"
 
+# A second allowlisted repository, carrying an installation of its own. Its owner
+# is taken from the first, since the canned GitHub answers under one owner and a
+# grant naming another would fail the broker's own narrowing check.
+ELSEWHERE_REPOSITORY="${SERVED_REPOSITORY%/*}/elsewhere-repo"
+ELSEWHERE_INSTALLATION=345678
+
 fail_with_log() {
   local text
   text="$(broker_log)"
   fail "$1" "${text}"
+}
+
+# The route the most recent mint was sent to.
+last_mint_path() {
+  grep -oE '/app/installations/[0-9]+/access_tokens' "${FAKE_GITHUB_LOG}" | tail -n 1
 }
 
 # start_broker STATUSES — a canned GitHub answering one comma-separated status per
@@ -52,6 +63,53 @@ start_broker() {
 
   fixture_config "${SCENARIO_ROOT}/config.json" "${WORK}/app.pem" \
     --socket "${SCENARIO_SOCKET}" --api-url "${FAKE_GITHUB_URL}"
+
+  ENDPOINT="unix://${SCENARIO_SOCKET}"
+  broker_start "${SCENARIO_ROOT}/config.json" "${SCENARIO_ROOT}/broker.log"
+  broker_wait_socket
+}
+
+# A broker whose allowlist spreads two repositories over two installations. The
+# configuration is written here rather than by fixture_config, which allowlists
+# one repository on the default installation and is what every other case wants.
+start_broker_installations() {
+  SCENARIO_ROOT="${WORK}/installations"
+  SCENARIO_SOCKET="${SCENARIO_ROOT}/run/broker.sock"
+  mkdir -p "$(dirname "${SCENARIO_SOCKET}")"
+
+  if ! fixture_github "${SCENARIO_ROOT}" --status-sequence 201 --token "${TOKEN}"; then
+    return 1
+  fi
+
+  cat > "${SCENARIO_ROOT}/config.json" << CONFIG
+{
+  "github_host": "github.com",
+  "api_url": "${FAKE_GITHUB_URL}",
+  "app_id": ${FIXTURE_APP_ID},
+  "installation_id": ${FIXTURE_INSTALLATION_ID},
+  "private_key_path": "${WORK}/app.pem",
+  "listen": {
+    "unix_socket": {
+      "path": "${SCENARIO_SOCKET}"
+    }
+  },
+  "repositories": {
+    "${SERVED_REPOSITORY}": {
+      "permissions": {
+        "contents": "write",
+        "pull_requests": "write"
+      }
+    },
+    "${ELSEWHERE_REPOSITORY}": {
+      "installation_id": ${ELSEWHERE_INSTALLATION},
+      "permissions": {
+        "contents": "write",
+        "pull_requests": "write"
+      }
+    }
+  }
+}
+CONFIG
 
   ENDPOINT="unix://${SCENARIO_SOCKET}"
   broker_start "${SCENARIO_ROOT}/config.json" "${SCENARIO_ROOT}/broker.log"
@@ -152,6 +210,41 @@ if [[ -z "${skip_note}" ]] && start_broker 201; then
 elif [[ -n "${skip_note}" ]]; then
   report_skip "    " "the real GitHub CLI runs (${skip_note})"
 fi
+
+# --- which installation a repository is minted against -------------------------
+#
+# The allowlist binds each entry to one. Both are exercised against the same
+# broker, so the two routes have to differ: a mint ignoring the entry would send
+# each of them to the same place and fail one assertion or the other.
+
+if start_broker_installations; then
+  run_capture env \
+    "GITHUB_TOKEN_BROKER_ENDPOINT=${ENDPOINT}" \
+    "GITHUB_TOKEN_BROKER_GH=${GH_STUB}" \
+    github-token gh "${SERVED_REPOSITORY}" -- pr create --fill
+
+  assert_eq "an entry naming no installation mints" 42 "${RUN_STATUS}"
+
+  ROUTE="$(last_mint_path)"
+  assert_eq "against the top-level one" \
+    "/app/installations/${FIXTURE_INSTALLATION_ID}/access_tokens" "${ROUTE}"
+
+  run_capture env \
+    "GITHUB_TOKEN_BROKER_ENDPOINT=${ENDPOINT}" \
+    "GITHUB_TOKEN_BROKER_GH=${GH_STUB}" \
+    github-token gh "${ELSEWHERE_REPOSITORY}" -- pr create --fill
+
+  assert_eq "an entry carrying its own installation mints" 42 "${RUN_STATUS}"
+
+  ROUTE="$(last_mint_path)"
+  assert_eq "against that one instead" \
+    "/app/installations/${ELSEWHERE_INSTALLATION}/access_tokens" "${ROUTE}"
+else
+  fail_with_log "the broker starts with two installations allowlisted"
+fi
+
+broker_stop
+fixture_github_stop
 
 # --- what GitHub's refusal costs the caller ------------------------------------
 #

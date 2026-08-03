@@ -15,10 +15,16 @@ public sealed class RepositoryAllowlist
     private readonly FrozenDictionary<string, RepositoryAccessPolicy> _policies;
 
     private RepositoryAllowlist(FrozenDictionary<string, RepositoryAccessPolicy> policies)
-        => _policies = policies;
+    {
+        _policies = policies;
+        this.InstallationCount = policies.Values.Select(policy => policy.Installation).Distinct().Count();
+    }
 
     /// <summary>How many repositories are allowlisted.</summary>
     public int Count => _policies.Count;
+
+    /// <summary>How many distinct installations those repositories are spread over.</summary>
+    public int InstallationCount { get; }
 
     /// <summary>Every policy in the allowlist, in no guaranteed order.</summary>
     public IReadOnlyCollection<RepositoryAccessPolicy> Policies => _policies.Values;

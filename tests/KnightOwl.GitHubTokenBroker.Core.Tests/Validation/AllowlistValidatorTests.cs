@@ -17,6 +17,7 @@ public sealed class AllowlistValidatorTests
                     ["example-owner/example-repo"] = Entry(("contents", "write"), ("checks", "read")),
                     ["other/upstream"] = Entry(("contents", "read")),
                 },
+                TestInstallations.Installation(),
                 out var allowlist,
                 out _
             )
@@ -28,9 +29,81 @@ public sealed class AllowlistValidatorTests
     }
 
     [Fact]
+    public void AnEntryTakesTheDefaultInstallationOrItsOwn()
+    {
+        const long expected = 345678;
+
+        Assert.True(
+            AllowlistValidator.TryValidate(
+                new Dictionary<string, RepositoryDocument>(StringComparer.Ordinal)
+                {
+                    ["example-owner/example-repo"] = Entry(("contents", "write")),
+                    ["other/upstream"] = EntryIn(expected, ("contents", "read")),
+                },
+                TestInstallations.Installation(),
+                out var allowlist,
+                out _
+            )
+        );
+
+        Assert.True(allowlist.TryResolve(RepositoryName.Parse("example-owner/example-repo"), out var fallback));
+        Assert.Equal(TestInstallations.DefaultNumber, fallback.Installation.Value);
+
+        Assert.True(allowlist.TryResolve(RepositoryName.Parse("other/upstream"), out var overridden));
+        Assert.Equal(expected, overridden.Installation.Value);
+
+        Assert.Equal(2, allowlist.InstallationCount);
+    }
+
+    [Fact]
+    public void CountsOneInstallationWhenNoEntryOverridesIt()
+    {
+        // Paired with the case above, which starts from two: a count that never
+        // moves would satisfy either test alone.
+        Assert.True(
+            AllowlistValidator.TryValidate(
+                new Dictionary<string, RepositoryDocument>(StringComparer.Ordinal)
+                {
+                    ["example-owner/example-repo"] = Entry(("contents", "write")),
+                    ["other/upstream"] = Entry(("contents", "read")),
+                },
+                TestInstallations.Installation(),
+                out var allowlist,
+                out _
+            )
+        );
+
+        Assert.Equal(1, allowlist.InstallationCount);
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void RefusesANonPositiveInstallationOverride(long installationId)
+    {
+        Assert.False(
+            AllowlistValidator.TryValidate(
+                new Dictionary<string, RepositoryDocument>(StringComparer.Ordinal)
+                {
+                    ["owner/repo"] = EntryIn(installationId, ("contents", "read")),
+                },
+                TestInstallations.Installation(),
+                out _,
+                out var error
+            )
+        );
+
+        Assert.Equal(
+            "The repositories entry \"owner/repo\" installation_id must be a positive number.",
+            error
+        );
+    }
+
+    [Fact]
     public void RefusesAnAbsentAllowlist()
     {
-        Assert.False(AllowlistValidator.TryValidate(null, out _, out var error));
+        Assert.False(AllowlistValidator.TryValidate(null, TestInstallations.Installation(), out _, out var error));
+
         Assert.Equal("The repositories section must declare at least one repository.", error);
     }
 
@@ -40,6 +113,7 @@ public sealed class AllowlistValidatorTests
         Assert.False(
             AllowlistValidator.TryValidate(
                 new Dictionary<string, RepositoryDocument>(StringComparer.Ordinal),
+                TestInstallations.Installation(),
                 out _,
                 out var error
             )
@@ -61,6 +135,7 @@ public sealed class AllowlistValidatorTests
                 {
                     [key] = Entry(("contents", "read")),
                 },
+                TestInstallations.Installation(),
                 out _,
                 out var error
             )
@@ -79,6 +154,7 @@ public sealed class AllowlistValidatorTests
                     ["owner/repo"] = new(),
                     ["other/repo"] = Entry(),
                 },
+                TestInstallations.Installation(),
                 out _,
                 out var error
             )
@@ -105,6 +181,7 @@ public sealed class AllowlistValidatorTests
                 {
                     ["owner/repo"] = Entry((name, level)),
                 },
+                TestInstallations.Installation(),
                 out _,
                 out var error
             )
@@ -129,6 +206,7 @@ public sealed class AllowlistValidatorTests
                     ["Owner/Repo"] = Entry(("contents", "write")),
                     ["owner/repo"] = Entry(("contents", "read")),
                 },
+                TestInstallations.Installation(),
                 out _,
                 out var error
             )
@@ -141,10 +219,23 @@ public sealed class AllowlistValidatorTests
     private static RepositoryDocument Entry(params (string Name, string Level)[] permissions)
         => new()
         {
-            Permissions = permissions.ToDictionary(
-                permission => permission.Name,
-                permission => permission.Level,
-                StringComparer.Ordinal
-            ),
+            Permissions = PermissionsOf(permissions),
         };
+
+    private static RepositoryDocument EntryIn(
+        long installationId,
+        params (string Name, string Level)[] permissions
+    )
+        => new()
+        {
+            InstallationId = installationId,
+            Permissions = PermissionsOf(permissions),
+        };
+
+    private static Dictionary<string, string> PermissionsOf((string Name, string Level)[] permissions)
+        => permissions.ToDictionary(
+            permission => permission.Name,
+            permission => permission.Level,
+            StringComparer.Ordinal
+        );
 }

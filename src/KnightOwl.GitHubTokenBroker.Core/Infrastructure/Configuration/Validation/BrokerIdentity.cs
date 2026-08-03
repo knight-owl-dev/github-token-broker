@@ -8,11 +8,11 @@ namespace KnightOwl.GitHubTokenBroker.Infrastructure.Configuration.Validation;
 /// </summary>
 /// <param name="Host">The GitHub host this broker serves.</param>
 /// <param name="AppId">The App identity used as the JWT issuer.</param>
-/// <param name="InstallationId">The installation whose tokens this broker mints.</param>
+/// <param name="Installation">The installation an allowlist entry falls back to.</param>
 /// <param name="PrivateKeyPath">Absolute path to the App private key.</param>
 internal sealed record BrokerIdentity(
     GitHubHost Host,
     long AppId,
-    long InstallationId,
+    InstallationId Installation,
     string PrivateKeyPath
 );

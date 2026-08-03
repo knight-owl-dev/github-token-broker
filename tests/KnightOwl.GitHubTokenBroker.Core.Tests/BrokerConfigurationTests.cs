@@ -29,7 +29,7 @@ public sealed class BrokerConfigurationTests
 
         Assert.Equal(GitHubHost.GitHubCom, configuration.Host);
         Assert.Equal(123456, configuration.AppId);
-        Assert.Equal(789012, configuration.InstallationId);
+        Assert.Equal(789012, configuration.DefaultInstallation.Value);
         Assert.Equal("/keys/app.pem", configuration.PrivateKeyPath);
         Assert.Equal("/run/broker.sock", configuration.Listen.UnixSocket.Path);
         Assert.Equal(new Uri(BrokerConfiguration.DefaultApiUrl), configuration.ApiBaseUri);
@@ -107,8 +107,12 @@ public sealed class BrokerConfigurationTests
     /// An allowlist that is empty and one that is absent are the same mistake.
     /// </remarks>
     [Theory]
-    [InlineData("""{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { } }""")]
-    [InlineData("""{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } } }""")]
+    [InlineData(
+        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } }, "repositories": { } }"""
+    )]
+    [InlineData(
+        """{ "app_id": 1, "installation_id": 2, "private_key_path": "/k.pem", "listen": { "unix_socket": { "path": "/s.sock" } } }"""
+    )]
     public void RejectsAnAllowlistThatServesNothing(string json)
         => Rejects(json);
 
@@ -183,6 +187,77 @@ public sealed class BrokerConfigurationTests
 
         Assert.Contains("schema", failure.Message, StringComparison.Ordinal);
     }
+
+    /// <remarks>
+    /// Reaches the override through the document rather than through
+    /// <c>AllowlistValidator</c>, which takes entries already deserialized and so
+    /// cannot show that <c>installation_id</c> maps onto the member reading it.
+    /// </remarks>
+    [Fact]
+    public void ReadsAPerRepositoryInstallationOverride()
+    {
+        var configuration = BrokerConfiguration.FromJson(
+            """
+            {
+              "app_id": 123456,
+              "installation_id": 789012,
+              "private_key_path": "/keys/app.pem",
+              "listen": { "unix_socket": { "path": "/run/broker.sock" } },
+              "repositories": {
+                "example-owner/example-repo": {
+                  "permissions": { "contents": "write" }
+                },
+                "other-owner/their-repo": {
+                  "installation_id": 345678,
+                  "permissions": { "contents": "read" }
+                }
+              }
+            }
+            """
+        );
+
+        Assert.True(
+            configuration.Allowlist.TryResolve(
+                RepositoryName.Parse("example-owner/example-repo"),
+                out var fallback
+            )
+        );
+
+        Assert.Equal(789012, fallback.Installation.Value);
+
+        Assert.True(
+            configuration.Allowlist.TryResolve(
+                RepositoryName.Parse("other-owner/their-repo"),
+                out var overridden
+            )
+        );
+
+        Assert.Equal(345678, overridden.Installation.Value);
+    }
+
+    /// <param name="member">A near miss for the override's name.</param>
+    /// <remarks>
+    /// Unmapped members are refused inside a repository entry as well as at the
+    /// top level, so a spelling that is nearly right stops the broker rather than
+    /// leaving the entry on the default installation.
+    /// </remarks>
+    [Theory]
+    [InlineData("installationId")]
+    [InlineData("installation")]
+    public void RejectsAMisspelledInstallationOverride(string member)
+        => Rejects(
+            $$"""
+            {
+              "app_id": 1,
+              "installation_id": 2,
+              "private_key_path": "/k.pem",
+              "listen": { "unix_socket": { "path": "/s.sock" } },
+              "repositories": {
+                "o/r": { "{{member}}": 3, "permissions": { "contents": "read" } }
+              }
+            }
+            """
+        );
 
     private static void Rejects(string json)
         => Assert.Throws<ConfigurationException>(() => BrokerConfiguration.FromJson(json));
@@ -278,11 +353,24 @@ public sealed class BrokerConfigurationTests
     public void GrantKeyBindsRepositoryAndCeilingTogether()
     {
         var repository = RepositoryName.Parse("owner/repo");
+        var installation = TestInstallations.Installation();
 
-        RepositoryAccessPolicy read = new(repository, PermissionSetFor("read"));
-        RepositoryAccessPolicy write = new(repository, PermissionSetFor("write"));
+        RepositoryAccessPolicy read = new(repository, installation, PermissionSetFor("read"));
+        RepositoryAccessPolicy write = new(repository, installation, PermissionSetFor("write"));
 
         Assert.NotEqual(read.GrantKey, write.GrantKey);
+    }
+
+    [Fact]
+    public void GrantKeyBindsTheInstallationToo()
+    {
+        var repository = RepositoryName.Parse("owner/repo");
+        var ceiling = PermissionSetFor("write");
+
+        RepositoryAccessPolicy here = new(repository, TestInstallations.Installation(), ceiling);
+        RepositoryAccessPolicy elsewhere = new(repository, TestInstallations.Installation(345678), ceiling);
+
+        Assert.NotEqual(here.GrantKey, elsewhere.GrantKey);
     }
 
     private static Domain.Permissions.PermissionSet PermissionSetFor(string level)

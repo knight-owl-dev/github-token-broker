@@ -31,32 +31,20 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
     private const string RepositorySelectionSelected = "selected";
 
     private readonly HttpClient _httpClient;
+    private readonly Uri _baseAddress;
     private readonly IAppJwtFactory _appJwtFactory;
     private readonly TimeProvider _timeProvider;
-    private readonly long _installationId;
     private readonly ILogger<GitHubInstallationTokenIssuer> _logger;
-
-    /// <summary>The route to mint on, relative to the client's base address.</summary>
-    private readonly string _accessTokensPath;
-
-    /// <summary>
-    /// Where <see cref="_accessTokensPath"/> resolves to, for the messages that name it.
-    /// Derived from that same string: a diagnostic pointing somewhere other than where
-    /// the request went would be worse than none.
-    /// </summary>
-    private readonly string _target;
 
     /// <summary>Creates the issuer.</summary>
     /// <param name="httpClient">Client whose base address and timeout are already configured.</param>
     /// <param name="appJwtFactory">Supplies the App JWT for each attempt.</param>
     /// <param name="timeProvider">Clock used to judge the returned expiry.</param>
-    /// <param name="installationId">The installation to mint against.</param>
     /// <param name="logger">Receives token-free diagnostics.</param>
     public GitHubInstallationTokenIssuer(
         HttpClient httpClient,
         IAppJwtFactory appJwtFactory,
         TimeProvider timeProvider,
-        long installationId,
         ILogger<GitHubInstallationTokenIssuer> logger
     )
     {
@@ -64,29 +52,27 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         ArgumentNullException.ThrowIfNull(appJwtFactory);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(installationId);
 
-        if (httpClient.BaseAddress is null)
-        {
-            throw new ArgumentException(
+        _baseAddress = httpClient.BaseAddress
+            ?? throw new ArgumentException(
                 "The client must already have its base address configured.",
                 nameof(httpClient)
             );
-        }
 
         _httpClient = httpClient;
         _appJwtFactory = appJwtFactory;
         _timeProvider = timeProvider;
-        _installationId = installationId;
         _logger = logger;
-
-        _accessTokensPath = string.Create(
-            CultureInfo.InvariantCulture,
-            $"app/installations/{installationId}/access_tokens"
-        );
-
-        _target = new Uri(httpClient.BaseAddress, _accessTokensPath).AbsoluteUri;
     }
+
+    /// <summary>The route a policy mints on, relative to the client's base address.</summary>
+    /// <param name="installation">The installation the policy is minted against.</param>
+    /// <returns>The route.</returns>
+    private static string AccessTokensPath(InstallationId installation)
+        => string.Create(
+            CultureInfo.InvariantCulture,
+            $"app/installations/{installation.Text}/access_tokens"
+        );
 
     /// <inheritdoc/>
     public async Task<InstallationToken> IssueAsync(
@@ -112,7 +98,9 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
             );
         }
 
-        using HttpRequestMessage request = new(HttpMethod.Post, _accessTokensPath);
+        var accessTokensPath = AccessTokensPath(policy.Installation);
+
+        using HttpRequestMessage request = new(HttpMethod.Post, accessTokensPath);
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt.Value);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
@@ -161,7 +149,7 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         {
             if (response.StatusCode != HttpStatusCode.Created)
             {
-                throw Classify(response, jwt.KeyId);
+                throw Classify(response, policy.Installation, accessTokensPath, jwt.KeyId);
             }
 
             InstallationTokenResponse? body;
@@ -199,10 +187,22 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
     /// is told to check.
     /// </summary>
     /// <param name="response">The response GitHub returned.</param>
+    /// <param name="installation">The installation the attempt was made against.</param>
+    /// <param name="accessTokensPath">The route the attempt was sent to.</param>
     /// <param name="keyId">Identifier of the key that signed the attempt.</param>
     /// <returns>The classified failure, ready to throw.</returns>
-    private TokenIssuanceException Classify(HttpResponseMessage response, string keyId)
-        => response.StatusCode switch
+    private TokenIssuanceException Classify(
+        HttpResponseMessage response,
+        InstallationId installation,
+        string accessTokensPath,
+        string keyId
+    )
+    {
+        // Resolved from the route the request used, so a diagnostic never names
+        // somewhere the request did not go.
+        var target = new Uri(_baseAddress, accessTokensPath).AbsoluteUri;
+
+        return response.StatusCode switch
         {
             HttpStatusCode.Unauthorized => new TokenIssuanceException(
                 TokenIssuanceFailure.AppUnauthorized,
@@ -224,14 +224,15 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
             ),
             HttpStatusCode.Forbidden => new TokenIssuanceException(
                 TokenIssuanceFailure.InstallationForbidden,
-                $"GitHub refused installation {_installationId}; it may be suspended."
+                $"GitHub refused installation {installation.Text}; it may be suspended."
             ),
+
             // A misconfigured api_url answers 404 exactly as a missing installation does,
             // and nothing in the body separates them, so the message names the target.
             HttpStatusCode.NotFound => new TokenIssuanceException(
                 TokenIssuanceFailure.InstallationOrRepositoryMissing,
-                $"GitHub does not recognize installation {_installationId} or the requested "
-                + $"repository. The request went to {_target}."
+                $"GitHub does not recognize installation {installation.Text} or the requested "
+                + $"repository. The request went to {target}."
             ),
             HttpStatusCode.UnprocessableContent => new TokenIssuanceException(
                 TokenIssuanceFailure.PermissionDrift,
@@ -250,9 +251,10 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
             _ => new TokenIssuanceException(
                 TokenIssuanceFailure.UnrecognizedStatus,
                 $"GitHub returned status {(int) response.StatusCode}, which this broker has "
-                + $"no reading for. The request went to {_target}."
+                + $"no reading for. The request went to {target}."
             ),
         };
+    }
 
     /// <summary>Reports whether a refusal is a rate limit rather than a decision.</summary>
     /// <param name="response">The refusing response.</param>

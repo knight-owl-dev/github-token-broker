@@ -243,10 +243,9 @@ succeeds, then delete the old key at GitHub.
 No restart is needed, since the key is re-read on every mint.
 .\" -------------------------------------------------------------------------
 .Sh CACHE
-In memory only, keyed by normalized repository
-.Em and
-effective permissions, so narrowing a ceiling cannot silently reuse a token
-minted under a broader one.
+In memory only, keyed by normalized repository, its installation, and its
+effective permissions, so a configuration change cannot silently reuse a token
+minted under the previous, broader grant.
 .Pp
 A token is reused only while more than
 .Ic token_refresh_margin_seconds

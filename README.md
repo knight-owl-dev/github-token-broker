@@ -55,7 +55,7 @@ startup, so a misspelled security-sensitive key is refused rather than ignored.
 | Setting | | Meaning |
 | --- | --- | --- |
 | `app_id` | required | The App's numeric identity, from its registration. Signed into every JWT as `iss`. |
-| `installation_id` | required | Which installation of that App to mint against, the number in the installation's settings URL. |
+| `installation_id` | required | Which installation of that App to mint against, the number in the installation's settings URL. An allowlist entry may name a different one; this is what the rest take. |
 | `private_key_path` | required | Absolute path to the App's PEM private key. Re-read on every mint, so replacing the file rotates the key with no restart. |
 | `listen` | required | Where requests are accepted. See the three shapes below. |
 | `repositories` | required | The allowlist, and the permission ceiling for each entry. |
@@ -93,6 +93,36 @@ each entry declares at least one permission.
 
 A repository absent from the list is refused with the same status and message as
 every other refusal, so a caller cannot use error text to discover what is here.
+
+#### Installations
+
+An entry may carry its own `installation_id`, which is how a repository outside
+the App owner's account is served: its owner installs the same App, and that
+installation's number goes here. The top-level value serves every entry that
+omits one.
+
+```json
+{
+  "installation_id": 789012,
+  "repositories": {
+    "example-owner/example-repo": {
+      "permissions": { "contents": "write" }
+    },
+    "other-owner/their-repo": {
+      "installation_id": 345678,
+      "permissions": { "contents": "write", "pull_requests": "write" }
+    }
+  }
+}
+```
+
+One App and one private key throughout: an installation is an address, and the
+key is the credential that addresses it. A rejected App JWT therefore still
+discards every cached grant.
+
+Whether an installation covers the repository listed against it is settled at
+the first mint, the broker reaching GitHub for nothing else. A mismatch answers
+as a missing installation — see [Token minting](#token-minting).
 
 #### Permissions are a ceiling
 
@@ -375,8 +405,9 @@ rejected.
 
 ## Cache
 
-In memory only, keyed by normalized repository *and* effective permissions, so
-a ceiling change cannot silently reuse a token minted under a broader one.
+In memory only, keyed by normalized repository, its installation, and its
+effective permissions, so a configuration change cannot silently reuse a token
+minted under the previous, broader grant.
 
 A token is reused only while more than the refresh margin remains. There is no
 refresh loop: a token is minted by the first request that finds none fresh
@@ -408,21 +439,27 @@ Keep the private key outside any build context, image layer, repository, or
 workspace. It can mint tokens for every installation of the App, which makes it
 more valuable than any token it produces.
 
-### Work from forks
+### Repositories owned by someone else
 
-Fork each target repository into the account that owns the App. One
-installation then covers everything, and no cross-organization App has to be
-negotiated or maintained. This is the setup the design assumes.
+An App installed on one account grants no access to another's repositories, even
+when the App owner is a collaborator there; only that owner can install it. Two
+setups follow.
 
-It is also the only setup that works for a repository owned by someone else. An
-App installed on one account grants no access to another's repositories, even
-when the App owner is a collaborator there; only that owner can install it.
+**Ask the owner to install the App.** They install it on the repositories they
+are willing to serve and send back the installation's number, which goes on
+those allowlist entries — see [Installations](#installations). Nothing is
+copied, and pull requests work as they normally do.
 
-Keep pull requests inside the fork, targeting its own default branch. Creating
-one requires `pull_requests: write` on the **base** repository, so a token
-scoped to a fork cannot open a pull request against an upstream. Review and
-merge in the fork; forwarding the change upstream afterwards needs nothing from
-this service.
+**Fork into the account that owns the App.** Where an owner will not install it,
+fork and work in the copy. Keep pull requests inside the fork, targeting its own
+default branch: creating one requires `pull_requests: write` on the **base**
+repository, so a token scoped to a fork cannot open a pull request against an
+upstream. Review and merge in the fork; forwarding the change upstream
+afterwards needs nothing from this service.
+
+Forking is not always available either. Organizations disallow forking of
+private and internal repositories by default, and an enterprise policy can
+withhold it outright.
 
 ## Build and test
 

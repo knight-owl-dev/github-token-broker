@@ -16,6 +16,10 @@ UNLISTED_REPOSITORY="integration-owner/unlisted-repo"
 # The App a JWT must be attributed to, in the configuration and in the fake.
 FIXTURE_APP_ID=123456
 
+# The installation every allowlist entry falls back to. Named so a case writing
+# its own configuration can expect the same route this one produces.
+FIXTURE_INSTALLATION_ID=789012
+
 FIXTURE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 fixture_key() {
@@ -123,7 +127,7 @@ $(join_members "${socket_members[@]}")
     top_members+=("  \"api_url\": \"${api_url}\"")
   fi
   top_members+=("  \"app_id\": ${FIXTURE_APP_ID}")
-  top_members+=("  \"installation_id\": 789012")
+  top_members+=("  \"installation_id\": ${FIXTURE_INSTALLATION_ID}")
   top_members+=("  \"private_key_path\": \"${key_path}\"")
   top_members+=("  \"listen\": {
 $(join_members "${listen_members[@]}")

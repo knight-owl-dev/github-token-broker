@@ -8,7 +8,16 @@ namespace KnightOwl.GitHubTokenBroker.Service.Tests.Doubles;
 /// <summary>Builds allowlist policies for tests.</summary>
 internal static class TestPolicies
 {
+    public const long DefaultInstallation = 789012;
+
     public static RepositoryAccessPolicy Policy(
+        string repository = "example-owner/example-repo",
+        params (string Name, string Level)[] permissions
+    )
+        => PolicyIn(DefaultInstallation, repository, permissions);
+
+    public static RepositoryAccessPolicy PolicyIn(
+        long installationId,
         string repository = "example-owner/example-repo",
         params (string Name, string Level)[] permissions
     )
@@ -26,7 +35,12 @@ internal static class TestPolicies
             throw new InvalidOperationException(error);
         }
 
-        return new RepositoryAccessPolicy(RepositoryName.Parse(repository), ceiling);
+        if (!InstallationId.TryCreate(installationId, out var installation, out var installationError))
+        {
+            throw new InvalidOperationException(installationError);
+        }
+
+        return new RepositoryAccessPolicy(RepositoryName.Parse(repository), installation, ceiling);
     }
 
     public static RepositoryAllowlist Allowlist(params RepositoryAccessPolicy[] policies)

@@ -71,7 +71,6 @@ internal static class BrokerServices
                         GitHubHttpClientFactory.Create(configuration.ApiBaseUri),
                         provider.GetRequiredService<IAppJwtFactory>(),
                         provider.GetRequiredService<TimeProvider>(),
-                        configuration.InstallationId,
                         provider.GetRequiredService<ILogger<GitHubInstallationTokenIssuer>>()
                     ),
                     new RetryBudget(

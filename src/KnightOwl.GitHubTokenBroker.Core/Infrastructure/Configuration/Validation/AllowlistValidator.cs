@@ -12,15 +12,19 @@ internal static class AllowlistValidator
 {
     /// <summary>Turns the configured entries into the allowlist the broker enforces.</summary>
     /// <param name="configured">The configured entries, keyed by repository.</param>
+    /// <param name="defaultInstallation">Serves an entry that names no installation of its own.</param>
     /// <param name="allowlist">The allowlist, when validation succeeds.</param>
     /// <param name="error">The complete rejection message, when it fails.</param>
     /// <returns><see langword="true"/> when every entry is usable.</returns>
     internal static bool TryValidate(
         Dictionary<string, RepositoryDocument>? configured,
+        InstallationId defaultInstallation,
         [NotNullWhen(true)] out RepositoryAllowlist? allowlist,
         [NotNullWhen(false)] out string? error
     )
     {
+        ArgumentNullException.ThrowIfNull(defaultInstallation);
+
         allowlist = null;
 
         if (configured is null || configured.Count == 0)
@@ -31,7 +35,7 @@ internal static class AllowlistValidator
 
         List<RepositoryAccessPolicy> policies = new(configured.Count);
 
-        foreach ((var key, var entry) in configured)
+        foreach (var (key, entry) in configured)
         {
             if (!RepositoryName.TryParse(key, out var repository, out var repositoryError))
             {
@@ -51,7 +55,19 @@ internal static class AllowlistValidator
                 return false;
             }
 
-            policies.Add(new RepositoryAccessPolicy(repository, ceiling));
+            var installation = defaultInstallation;
+            if (entry.InstallationId is { } overridden)
+            {
+                if (!InstallationId.TryCreate(overridden, out var parsed, out var installationError))
+                {
+                    error = $"The repositories entry \"{key}\" installation_id {installationError}.";
+                    return false;
+                }
+
+                installation = parsed;
+            }
+
+            policies.Add(new RepositoryAccessPolicy(repository, installation, ceiling));
         }
 
         if (!RepositoryAllowlist.TryCreate(policies, out allowlist, out var allowlistError))
