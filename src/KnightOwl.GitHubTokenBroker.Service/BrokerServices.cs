@@ -32,6 +32,10 @@ internal static class BrokerServices
             ArgumentNullException.ThrowIfNull(services);
             ArgumentNullException.ThrowIfNull(configuration);
 
+            // Without this the framework default cuts off a mint the retry budget is
+            // still spending.
+            services.Configure<HostOptions>(host => host.ShutdownTimeout = BrokerProtocol.ShutdownDrain);
+
             services.AddSingleton(TimeProvider.System);
             services.AddSingleton(configuration);
             services.AddSingleton(configuration.Allowlist);

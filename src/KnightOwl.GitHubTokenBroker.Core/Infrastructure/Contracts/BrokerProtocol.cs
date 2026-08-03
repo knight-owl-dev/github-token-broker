@@ -50,4 +50,17 @@ public static class BrokerProtocol
     /// </para>
     /// </remarks>
     public static TimeSpan MintRetryBudget => ClientRequestTimeout - MintAttemptTimeout - ClientOverhead;
+
+    /// <summary>
+    /// How long a stopping broker keeps serving the requests already in flight.
+    /// </summary>
+    /// <remarks>
+    /// The client's whole wait, which is the tightest bound that still finishes what a
+    /// caller is waiting for: a request in flight when the stop arrives has at most this
+    /// much of its caller's patience left, usually less. The framework default of five
+    /// seconds abandons a mint that <see cref="MintAttemptTimeout"/> and
+    /// <see cref="MintRetryBudget"/> together allow to run far longer, and a dropped
+    /// connection reads to the caller as an absent broker.
+    /// </remarks>
+    public static TimeSpan ShutdownDrain => ClientRequestTimeout;
 }
