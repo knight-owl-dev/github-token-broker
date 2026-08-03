@@ -62,8 +62,7 @@ internal static class BrokerApi
 
                     try
                     {
-                        var token = await tokens
-                            .IssueAsync(policy, context.RequestAborted);
+                        var token = await tokens.IssueAsync(policy, context.RequestAborted);
 
                         await WriteJsonAsync(
                             context,
