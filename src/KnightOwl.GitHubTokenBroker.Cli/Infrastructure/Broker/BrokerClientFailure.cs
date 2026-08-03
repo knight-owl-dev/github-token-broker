@@ -22,9 +22,17 @@ public enum BrokerClientFailure
     Failed = 3,
 
     /// <summary>
-    /// The repository is allowlisted but the App installation does not grant it.
-    /// Distinct from <see cref="Unavailable"/> because retrying cannot help, and
-    /// from <see cref="Refused"/> because an operator has something to fix.
+    /// The broker and GitHub disagree about what it may mint: the repository is
+    /// allowlisted but not installed, or the App credential was rejected. Distinct
+    /// from <see cref="Retryable"/> because it persists until an operator acts, and
+    /// from <see cref="Refused"/> because there is something to fix.
     /// </summary>
     Misconfigured = 4,
+
+    /// <summary>
+    /// The broker answered but could not reach GitHub. Distinct from
+    /// <see cref="Failed"/> because retrying can help, and from
+    /// <see cref="Unavailable"/> because the broker itself is reachable.
+    /// </summary>
+    Retryable = 5,
 }

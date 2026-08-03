@@ -21,11 +21,18 @@ public static class CliExitCode
     /// <summary>The broker could not be reached.</summary>
     public const int Unavailable = 69;
 
+    /// <summary>The broker was reached but GitHub was not, so retrying can help.</summary>
+    /// <remarks>
+    /// Apart from <see cref="Unavailable"/>, which is the broker itself: here it is
+    /// running and configured, and GitHub is what is missing.
+    /// </remarks>
+    public const int Temporary = 75;
+
     /// <summary>The broker refused the repository.</summary>
     public const int NotAuthorized = 77;
 
     /// <summary>
-    /// The broker and the App installation disagree, so retrying cannot help.
+    /// The broker and GitHub disagree about what it may mint, so retrying cannot help.
     /// </summary>
     public const int Configuration = 78;
 }

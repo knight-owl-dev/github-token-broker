@@ -16,6 +16,7 @@ internal static class BrokerClientFailureExtensions
                 BrokerClientFailure.Refused => CliExitCode.NotAuthorized,
                 BrokerClientFailure.Failed => CliExitCode.Internal,
                 BrokerClientFailure.Misconfigured => CliExitCode.Configuration,
+                BrokerClientFailure.Retryable => CliExitCode.Temporary,
             };
     }
 }

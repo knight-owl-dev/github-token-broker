@@ -308,7 +308,9 @@ wrong key, clock skew, or a rotated key.
 The whole cache is dropped, since every cached grant was minted with the
 credential GitHub just rejected.
 The client sees
-.Sy 503 .
+.Sy 409 ,
+since only clock skew clears on its own and a client retrying a revoked key
+never stops.
 .It Ic InstallationForbidden
 GitHub answered
 .Sy 403 ;
@@ -344,13 +346,11 @@ The client sees
 .Sy 503 .
 .El
 .Pp
-The two installation failures answer
-.Sy 409
-rather than
-.Sy 503
-because both persist until an operator changes something.
-A client that would retry an outage is told to look at the App installation
-instead.
+.Ic Unavailable
+alone answers
+.Sy 503 ,
+being the one class that clears without anyone acting.
+Every other class tells a client to go and look.
 .Pp
 A failed mint always drops whatever that grant had cached, since a token is only
 minted once the cached one is no longer fresh enough to serve.
@@ -369,18 +369,16 @@ Check that it is running and that the endpoint matches what it binds.
 .Ic UntrustworthyResponse ,
 or
 .Ic PrivateKeyUnusable .
-Also
-.Sy 503 ,
-which is
-.Ic AppUnauthorized
-or
+.It Sy 75
+.Sy 503 :
 .Ic Unavailable .
 .It Sy 77
 Refused before any mint was attempted, so no class was reached.
 The repository is absent from the allowlist.
 .It Sy 78
 .Sy 409 :
-.Ic InstallationForbidden
+.Ic AppUnauthorized ,
+.Ic InstallationForbidden ,
 or
 .Ic InstallationOrRepositoryMissing .
 .El

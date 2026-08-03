@@ -245,11 +245,20 @@ The broker could not be reached, or did not answer within 20 seconds.
 The broker answered but could not serve the request.
 Its log holds the reason; see DIAGNOSTICS in
 .Xr github-token-broker 8 .
+.It Sy 75
+The broker was reached but GitHub was not, so retrying can help.
+Apart from
+.Sy 69 ,
+which is the broker itself: here it is running and configured, and GitHub is
+what is missing.
 .It Sy 77
 The broker refused the repository.
 .It Sy 78
-The repository is allowlisted but the App installation does not grant it, so
-retrying cannot help.
+The broker and GitHub disagree about what it may mint, so retrying cannot help:
+the repository is allowlisted but not installed, or GitHub rejected the App
+credential.
+The broker's log says which; see DIAGNOSTICS in
+.Xr github-token-broker 8 .
 This is not the broker's own
 .Sy 78 ,
 which is a configuration document it refused at startup.

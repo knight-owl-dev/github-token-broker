@@ -151,22 +151,53 @@ elif [[ -n "${skip_note}" ]]; then
   report_skip "    " "the real GitHub CLI runs (${skip_note})"
 fi
 
-# --- a repository GitHub will not mint for --------------------------------------
+# --- what GitHub's refusal costs the caller ------------------------------------
 #
-# Allowlisted here, absent from the App installation. The broker answers 409
-# rather than 503 because retrying cannot help, and the client says to go and
-# look at the installation.
+# The cases above mint against the same fixture, so a status here is the refusal.
+# Which status is the whole of what a caller learns, every body being the same
+# coarse message. See DIAGNOSTICS in github-token-broker(8) for the classes.
 
+# 404: allowlisted here, absent from the App installation.
 if start_broker 404; then
   run_capture env "GITHUB_TOKEN_BROKER_ENDPOINT=${ENDPOINT}" \
     github-token gh "${SERVED_REPOSITORY}" -- --version
 
   assert_eq "a repository the installation lacks is a configuration error" \
     78 "${RUN_STATUS}"
-  assert_contains "and the client names the installation" \
+  assert_contains "and the client says to go and look" \
     "${RUN_STDERR}" "installation"
 else
   fail_with_log "the broker starts against a refusing GitHub"
+fi
+
+broker_stop
+fixture_github_stop
+
+# 401: the App credential itself, which mostly waits on an operator.
+if start_broker 401; then
+  run_capture env "GITHUB_TOKEN_BROKER_ENDPOINT=${ENDPOINT}" \
+    github-token gh "${SERVED_REPOSITORY}" -- --version
+
+  assert_eq "a rejected App credential is a configuration error" 78 "${RUN_STATUS}"
+  assert_contains "and the client says the credential may be why" \
+    "${RUN_STDERR}" "credential"
+else
+  fail_with_log "the broker starts against a GitHub rejecting the credential"
+fi
+
+broker_stop
+fixture_github_stop
+
+# 500: GitHub reachable and unusable, the one class a retry can clear.
+if start_broker 500; then
+  run_capture env "GITHUB_TOKEN_BROKER_ENDPOINT=${ENDPOINT}" \
+    github-token gh "${SERVED_REPOSITORY}" -- --version
+
+  assert_eq "GitHub being unusable is retryable rather than a mistake" \
+    75 "${RUN_STATUS}"
+  assert_contains "and the client says retrying can help" "${RUN_STDERR}" "Retrying"
+else
+  fail_with_log "the broker starts against an unusable GitHub"
 fi
 
 broker_stop

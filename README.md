@@ -247,8 +247,9 @@ example-owner/example-repo actions:read;checks:read;contents:write;pull_requests
 | 64 | wrong command line or environment |
 | 69 | the service could not be reached |
 | 70 | the service answered but could not serve the request; its log holds the reason |
+| 75 | the service was reached but GitHub was not, so retrying can help |
 | 77 | the service refused the repository |
-| 78 | the allowlist and the App installation disagree |
+| 78 | the service and GitHub disagree about what it may mint; its log says which |
 
 `github-token gh` instead returns the child's status verbatim, so a value here
 only ever reflects a failure before the child started.
@@ -345,7 +346,7 @@ an operator should check:
 
 | Class | Cause | Effect |
 | --- | --- | --- |
-| `AppUnauthorized` | `401`: wrong key, clock skew, rotated key | the whole cache is dropped |
+| `AppUnauthorized` | `401`: wrong key, clock skew, rotated key | the whole cache is dropped, and the client is told to go and look, since only clock skew clears on its own |
 | `InstallationForbidden` | `403`: installation suspended | the client is told to fix the installation |
 | `InstallationOrRepositoryMissing` | `404`: installation or repository gone | the client is told to fix the installation |
 | `PermissionDrift` | `422`: configuration asks for more than the App grants | reported distinctly |
@@ -355,9 +356,8 @@ an operator should check:
 A failed mint always drops whatever that grant had cached, because a token is
 only minted once the cached one is no longer fresh enough to serve.
 
-The two installation failures answer `409` rather than `503`: both persist until
-an operator changes something, so a client that would retry an outage is told to
-look at the App installation instead.
+Only `Unavailable` answers `503`, being the one class that clears without anyone
+acting. Every other class tells a client to go and look.
 
 ### Key rotation
 

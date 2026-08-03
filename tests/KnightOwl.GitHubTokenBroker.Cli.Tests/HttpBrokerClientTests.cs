@@ -101,15 +101,16 @@ public sealed class HttpBrokerClientTests
     /// <param name="status">The status the broker answered with.</param>
     /// <param name="expected">How the client classifies it.</param>
     /// <remarks>
-    /// Conflict is the repository allowlisted here but absent from the App
-    /// installation, which retrying cannot help, so it is classified apart from
-    /// the statuses that mean try again.
+    /// Conflict is the broker and GitHub disagreeing about what may be minted, which
+    /// retrying cannot help. ServiceUnavailable is the one an operator has nothing to
+    /// do about. Both are classified apart from the statuses that say only that the
+    /// broker's log holds the reason.
     /// </remarks>
     [Theory]
     [InlineData(HttpStatusCode.Forbidden, BrokerClientFailure.Refused)]
     [InlineData(HttpStatusCode.Conflict, BrokerClientFailure.Misconfigured)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, BrokerClientFailure.Retryable)]
     [InlineData(HttpStatusCode.Unauthorized, BrokerClientFailure.Failed)]
-    [InlineData(HttpStatusCode.ServiceUnavailable, BrokerClientFailure.Failed)]
     [InlineData(HttpStatusCode.InternalServerError, BrokerClientFailure.Failed)]
     [InlineData(HttpStatusCode.NotFound, BrokerClientFailure.Failed)]
     [InlineData(HttpStatusCode.UnsupportedMediaType, BrokerClientFailure.Failed)]

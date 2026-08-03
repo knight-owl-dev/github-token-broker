@@ -134,9 +134,14 @@ public sealed class HttpBrokerClient : IBrokerClient, IDisposable
                 ),
                 HttpStatusCode.Conflict => new BrokerClientException(
                     BrokerClientFailure.Misconfigured,
-                    $"The broker cannot mint for {repository.FullName}: it is allowlisted, "
-                    + "but the GitHub App installation does not grant it. "
-                    + "Check the installation's repository access."
+                    $"The broker cannot mint for {repository.FullName}: either the GitHub App "
+                    + "installation does not grant it, or GitHub rejected the App credential. "
+                    + "See the broker log."
+                ),
+                HttpStatusCode.ServiceUnavailable => new BrokerClientException(
+                    BrokerClientFailure.Retryable,
+                    $"The broker could not reach GitHub to mint for {repository.FullName}. "
+                    + "Retrying can help."
                 ),
                 _ when !response.IsSuccessStatusCode => new BrokerClientException(
                     BrokerClientFailure.Failed,
