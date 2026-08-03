@@ -228,6 +228,35 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
         Assert.Empty(handler.Requests);
     }
 
+    /// <param name="status">A refusal that leaves what answered it in doubt.</param>
+    /// <remarks>
+    /// Both statuses a wrong <c>api_url</c> produces: a 404 that reads as a missing
+    /// installation, and whatever a proxy in the way answers.
+    /// </remarks>
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    public async Task NamesTheUrlItCalledWhenWhatAnsweredIsInDoubt(HttpStatusCode status)
+    {
+        var (issuer, handler) = Build((_, _) => Json(status, "{}"));
+
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
+
+        // The message is checked against the URL read off the request, so it cannot pass
+        // by naming one that merely looks right.
+        var requested = Assert.Single(handler.Requests).RequestUri;
+        Assert.NotNull(requested);
+
+        var called = requested.AbsoluteUri;
+
+        Assert.Equal($"https://api.github.com/app/installations/{InstallationId}/access_tokens", called);
+        Assert.Contains(called, failure.Message, StringComparison.Ordinal);
+    }
+
     /// <param name="header">The header GitHub signals the limit through.</param>
     /// <param name="value">Its value.</param>
     /// <remarks>

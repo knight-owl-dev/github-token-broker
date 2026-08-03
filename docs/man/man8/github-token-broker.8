@@ -321,6 +321,11 @@ The client sees
 GitHub answered
 .Sy 404 ;
 the installation or the repository is gone.
+A mistyped
+.Ic api_url
+answers the same way and the broker cannot tell them apart, so the log names the
+URL the request went to.
+Compare it against the API root that was meant.
 The client sees
 .Sy 409 .
 .It Ic PermissionDrift

@@ -36,6 +36,16 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
     private readonly long _installationId;
     private readonly ILogger<GitHubInstallationTokenIssuer> _logger;
 
+    /// <summary>The route to mint on, relative to the client's base address.</summary>
+    private readonly string _accessTokensPath;
+
+    /// <summary>
+    /// Where <see cref="_accessTokensPath"/> resolves to, for the messages that name it.
+    /// Derived from that same string: a diagnostic pointing somewhere other than where
+    /// the request went would be worse than none.
+    /// </summary>
+    private readonly string _target;
+
     /// <summary>Creates the issuer.</summary>
     /// <param name="httpClient">Client whose base address and timeout are already configured.</param>
     /// <param name="appJwtFactory">Supplies the App JWT for each attempt.</param>
@@ -56,11 +66,26 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(installationId);
 
+        if (httpClient.BaseAddress is null)
+        {
+            throw new ArgumentException(
+                "The client must already have its base address configured.",
+                nameof(httpClient)
+            );
+        }
+
         _httpClient = httpClient;
         _appJwtFactory = appJwtFactory;
         _timeProvider = timeProvider;
         _installationId = installationId;
         _logger = logger;
+
+        _accessTokensPath = string.Create(
+            CultureInfo.InvariantCulture,
+            $"app/installations/{installationId}/access_tokens"
+        );
+
+        _target = new Uri(httpClient.BaseAddress, _accessTokensPath).AbsoluteUri;
     }
 
     /// <inheritdoc/>
@@ -87,13 +112,7 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
             );
         }
 
-        using HttpRequestMessage request = new(
-            HttpMethod.Post,
-            string.Create(
-                CultureInfo.InvariantCulture,
-                $"app/installations/{_installationId}/access_tokens"
-            )
-        );
+        using HttpRequestMessage request = new(HttpMethod.Post, _accessTokensPath);
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt.Value);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
@@ -207,9 +226,12 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
                 TokenIssuanceFailure.InstallationForbidden,
                 $"GitHub refused installation {_installationId}; it may be suspended."
             ),
+            // A misconfigured api_url answers 404 exactly as a missing installation does,
+            // and nothing in the body separates them, so the message names the target.
             HttpStatusCode.NotFound => new TokenIssuanceException(
                 TokenIssuanceFailure.InstallationOrRepositoryMissing,
-                $"GitHub does not recognize installation {_installationId} or the requested repository."
+                $"GitHub does not recognize installation {_installationId} or the requested "
+                + $"repository. The request went to {_target}."
             ),
             HttpStatusCode.UnprocessableContent => new TokenIssuanceException(
                 TokenIssuanceFailure.PermissionDrift,
@@ -227,7 +249,8 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
             // the API, which no retry and no configuration change resolves.
             _ => new TokenIssuanceException(
                 TokenIssuanceFailure.UnrecognizedStatus,
-                $"GitHub returned status {(int) response.StatusCode}, which this broker has no reading for."
+                $"GitHub returned status {(int) response.StatusCode}, which this broker has "
+                + $"no reading for. The request went to {_target}."
             ),
         };
 
