@@ -83,8 +83,11 @@ public sealed class BrokerTransportTests : IAsyncLifetime
         Directory.Delete(_root, recursive: true);
     }
 
+    private BrokerEndpoint UnixSocketEndpoint()
+        => BrokerEndpoint.Parse($"unix://{_socketPath}");
+
     private HttpBrokerClient UnixClient()
-        => HttpBrokerClient.Create(BrokerEndpoint.Parse($"unix://{_socketPath}"));
+        => HttpBrokerClient.Create(UnixSocketEndpoint());
 
     [Fact]
     public async Task ServesATokenOverAUnixSocket()
@@ -128,7 +131,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     [Fact]
     public async Task HealthNeverMints()
     {
-        using var raw = BrokerHttpClientFactory.Create(BrokerEndpoint.Parse($"unix://{_socketPath}"));
+        using var raw = BrokerHttpClientFactory.Create(UnixSocketEndpoint());
 
         using var response = await raw.GetAsync(
             new Uri(BrokerProtocol.HealthPath, UriKind.Relative),
@@ -165,7 +168,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     public async Task ClassifiesMintFailures(TokenIssuanceFailure failure, HttpStatusCode expected)
     {
         _issuer.Failure = failure;
-        using var raw = BrokerHttpClientFactory.Create(BrokerEndpoint.Parse($"unix://{_socketPath}"));
+        using var raw = BrokerHttpClientFactory.Create(UnixSocketEndpoint());
 
         using var response = await raw.PostAsync(
             new Uri(BrokerV1Routes.TokenPath, UriKind.Relative),
@@ -188,7 +191,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     [Fact]
     public async Task RefusesABodyThatIsNotJson()
     {
-        using var raw = BrokerHttpClientFactory.Create(BrokerEndpoint.Parse($"unix://{_socketPath}"));
+        using var raw = BrokerHttpClientFactory.Create(UnixSocketEndpoint());
 
         using var response = await raw.PostAsync(
             new Uri(BrokerV1Routes.TokenPath, UriKind.Relative),
@@ -202,7 +205,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     [Fact]
     public async Task RefusesAnOversizedBody()
     {
-        using var raw = BrokerHttpClientFactory.Create(BrokerEndpoint.Parse($"unix://{_socketPath}"));
+        using var raw = BrokerHttpClientFactory.Create(UnixSocketEndpoint());
 
         var oversized = "{\"host\":\"github.com\",\"repository\":\""
             + new string('a', BrokerProtocol.MaxRequestBytes * 2)
@@ -223,7 +226,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     [Fact]
     public async Task RefusesAGetOnTheTokenRoute()
     {
-        using var raw = BrokerHttpClientFactory.Create(BrokerEndpoint.Parse($"unix://{_socketPath}"));
+        using var raw = BrokerHttpClientFactory.Create(UnixSocketEndpoint());
 
         using var response = await raw.GetAsync(
             new Uri(BrokerV1Routes.TokenPath, UriKind.Relative),
