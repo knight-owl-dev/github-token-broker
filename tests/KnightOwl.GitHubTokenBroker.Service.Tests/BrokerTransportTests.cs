@@ -164,7 +164,10 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     [InlineData(TokenIssuanceFailure.PermissionDrift, HttpStatusCode.InternalServerError)]
     [InlineData(TokenIssuanceFailure.UntrustworthyResponse, HttpStatusCode.InternalServerError)]
     [InlineData(TokenIssuanceFailure.PrivateKeyUnusable, HttpStatusCode.InternalServerError)]
+    [InlineData(TokenIssuanceFailure.UnrecognizedStatus, HttpStatusCode.InternalServerError)]
     [InlineData(TokenIssuanceFailure.Unavailable, HttpStatusCode.ServiceUnavailable)]
+    [InlineData(TokenIssuanceFailure.TimedOut, HttpStatusCode.ServiceUnavailable)]
+    [InlineData(TokenIssuanceFailure.RateLimited, HttpStatusCode.ServiceUnavailable)]
     public async Task ClassifiesMintFailures(TokenIssuanceFailure failure, HttpStatusCode expected)
     {
         _issuer.Failure = failure;

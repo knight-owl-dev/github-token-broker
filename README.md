@@ -351,13 +351,17 @@ an operator should check:
 | `InstallationOrRepositoryMissing` | `404`: installation or repository gone | the client is told to fix the installation |
 | `PermissionDrift` | `422`: configuration asks for more than the App grants | reported distinctly |
 | `UntrustworthyResponse` | the response could not be proven narrow | reported distinctly |
-| `Unavailable` | timeout, transport failure, unexpected status | retried on the next request |
+| `PrivateKeyUnusable` | the key was readable at startup and is not now | reported distinctly |
+| `UnrecognizedStatus` | a status this broker has no reading for | reported distinctly |
+| `Unavailable` | transport failure, or a `500`, `502`, `503`, or `504` | retried on the next request |
+| `TimedOut` | GitHub did not answer within 15 seconds | retried on the next request |
+| `RateLimited` | `429`, or `403` carrying a rate-limit header | retried on the next request |
 
 A failed mint always drops whatever that grant had cached, because a token is
 only minted once the cached one is no longer fresh enough to serve.
 
-Only `Unavailable` answers `503`, being the one class that clears without anyone
-acting. Every other class tells a client to go and look.
+`Unavailable`, `TimedOut`, and `RateLimited` answer `503`, being the classes that
+clear without anyone acting. Every other class tells a client to go and look.
 
 ### Key rotation
 

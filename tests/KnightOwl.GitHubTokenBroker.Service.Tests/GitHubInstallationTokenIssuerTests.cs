@@ -162,14 +162,27 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
         Assert.Equal(token, issued.Value);
     }
 
+    /// <param name="status">The status GitHub answered with.</param>
+    /// <param name="expected">The class it earns.</param>
+    /// <remarks>
+    /// The 5xx arm is a closed list, so every member of it is here and 507 is not. A
+    /// status off the list is the broker and whatever answered it disagreeing about
+    /// the API, which puts an unasked-for <see cref="HttpStatusCode.OK"/> beside
+    /// <see cref="HttpStatusCode.BadRequest"/>.
+    /// </remarks>
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized, TokenIssuanceFailure.AppUnauthorized)]
     [InlineData(HttpStatusCode.Forbidden, TokenIssuanceFailure.InstallationForbidden)]
     [InlineData(HttpStatusCode.NotFound, TokenIssuanceFailure.InstallationOrRepositoryMissing)]
     [InlineData(HttpStatusCode.UnprocessableContent, TokenIssuanceFailure.PermissionDrift)]
+    [InlineData(HttpStatusCode.TooManyRequests, TokenIssuanceFailure.RateLimited)]
     [InlineData(HttpStatusCode.InternalServerError, TokenIssuanceFailure.Unavailable)]
     [InlineData(HttpStatusCode.BadGateway, TokenIssuanceFailure.Unavailable)]
-    [InlineData(HttpStatusCode.OK, TokenIssuanceFailure.Unavailable)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, TokenIssuanceFailure.Unavailable)]
+    [InlineData(HttpStatusCode.GatewayTimeout, TokenIssuanceFailure.Unavailable)]
+    [InlineData(HttpStatusCode.OK, TokenIssuanceFailure.UnrecognizedStatus)]
+    [InlineData(HttpStatusCode.BadRequest, TokenIssuanceFailure.UnrecognizedStatus)]
+    [InlineData(HttpStatusCode.InsufficientStorage, TokenIssuanceFailure.UnrecognizedStatus)]
     public async Task ClassifiesGitHubStatuses(
         HttpStatusCode status,
         TokenIssuanceFailure expected
@@ -215,8 +228,43 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
         Assert.Empty(handler.Requests);
     }
 
+    /// <param name="header">The header GitHub signals the limit through.</param>
+    /// <param name="value">Its value.</param>
+    /// <remarks>
+    /// GitHub spends 403 on a suspended installation and on a secondary rate limit
+    /// alike, and only a header separates them. Both headers get a case because either
+    /// alone is enough; <c>IsRateLimited</c> says why.
+    /// </remarks>
+    [Theory]
+    [InlineData("retry-after", "60")]
+    [InlineData("x-ratelimit-remaining", "0")]
+    public async Task ReadsARateLimitedRefusalApartFromASuspendedInstallation(
+        string header,
+        string value
+    )
+    {
+        var (issuer, _) = Build((_, _) =>
+            {
+                var response = Json(HttpStatusCode.Forbidden, "{}");
+                response.Headers.TryAddWithoutValidation(header, value);
+                return response;
+            }
+        );
+
+        var failure = await Assert.ThrowsAsync<TokenIssuanceException>(() => issuer.IssueAsync(
+                TestPolicies.Policy(),
+                CancellationToken.None
+            )
+        );
+
+        // The bare 403 in ClassifiesGitHubStatuses is the paired half: the headers are
+        // the only difference, so this cannot pass for an issuer that ignores them.
+        Assert.Equal(TokenIssuanceFailure.RateLimited, failure.Failure);
+    }
+
+    /// <remarks>A spent budget is not a failure another attempt recovers.</remarks>
     [Fact]
-    public async Task ReportsATimeoutAsUnavailable()
+    public async Task ReportsATimeoutApartFromAnOutage()
     {
         var (issuer, _) = Build((_, _) => throw new TaskCanceledException(
                 "timed out",
@@ -230,7 +278,7 @@ public sealed class GitHubInstallationTokenIssuerTests : IDisposable
             )
         );
 
-        Assert.Equal(TokenIssuanceFailure.Unavailable, failure.Failure);
+        Assert.Equal(TokenIssuanceFailure.TimedOut, failure.Failure);
     }
 
     [Fact]

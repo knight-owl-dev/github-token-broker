@@ -25,7 +25,7 @@ public enum TokenIssuanceFailure
     /// <summary>The response did not satisfy the guarantees this broker requires.</summary>
     UntrustworthyResponse = 6,
 
-    /// <summary>GitHub was unreachable, timed out, or returned an unexpected status.</summary>
+    /// <summary>GitHub was unreachable, or answered with a status it may recover from.</summary>
     Unavailable = 7,
 
     /// <summary>
@@ -33,4 +33,16 @@ public enum TokenIssuanceFailure
     /// startup. The file has been replaced with something unusable.
     /// </summary>
     PrivateKeyUnusable = 8,
+
+    /// <summary>The attempt reached its own timeout before GitHub answered.</summary>
+    TimedOut = 9,
+
+    /// <summary>GitHub is rate limiting this App.</summary>
+    RateLimited = 10,
+
+    /// <summary>
+    /// GitHub, or whatever answered in its place, returned a status this broker has
+    /// no reading for. Nothing about it says it clears on its own.
+    /// </summary>
+    UnrecognizedStatus = 11,
 }

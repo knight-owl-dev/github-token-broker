@@ -124,7 +124,7 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
         catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             throw new TokenIssuanceException(
-                TokenIssuanceFailure.Unavailable,
+                TokenIssuanceFailure.TimedOut,
                 "The GitHub token request timed out.",
                 exception
             );
@@ -194,8 +194,14 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
             // rate limit. Only the headers separate them, and calling a rate limit
             // suspended sends an operator to check an installation that is fine.
             HttpStatusCode.Forbidden when IsRateLimited(response) => new TokenIssuanceException(
-                TokenIssuanceFailure.Unavailable,
-                "GitHub is rate limiting this App; the request is retryable."
+                TokenIssuanceFailure.RateLimited,
+                "GitHub is rate limiting this App."
+            ),
+
+            // A 429 is a limit by definition, so the headers add nothing to read.
+            HttpStatusCode.TooManyRequests => new TokenIssuanceException(
+                TokenIssuanceFailure.RateLimited,
+                "GitHub is rate limiting this App."
             ),
             HttpStatusCode.Forbidden => new TokenIssuanceException(
                 TokenIssuanceFailure.InstallationForbidden,
@@ -209,9 +215,19 @@ public sealed class GitHubInstallationTokenIssuer : IInstallationTokenIssuer
                 TokenIssuanceFailure.PermissionDrift,
                 "GitHub refused the requested permissions; broker configuration asks for more than the App registration grants."
             ),
+            HttpStatusCode.InternalServerError
+                or HttpStatusCode.BadGateway
+                or HttpStatusCode.ServiceUnavailable
+                or HttpStatusCode.GatewayTimeout => new TokenIssuanceException(
+                    TokenIssuanceFailure.Unavailable,
+                    $"GitHub returned {(int) response.StatusCode}, which it may recover from."
+                ),
+
+            // Anything left is the broker and whatever answered it disagreeing about
+            // the API, which no retry and no configuration change resolves.
             _ => new TokenIssuanceException(
-                TokenIssuanceFailure.Unavailable,
-                $"GitHub returned an unexpected status {(int) response.StatusCode}."
+                TokenIssuanceFailure.UnrecognizedStatus,
+                $"GitHub returned status {(int) response.StatusCode}, which this broker has no reading for."
             ),
         };
 

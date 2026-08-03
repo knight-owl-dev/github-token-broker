@@ -338,18 +338,43 @@ The key was readable at startup and is not now, which is a rotation caught
 mid-flight.
 The client sees
 .Sy 500 .
+.It Ic UnrecognizedStatus
+GitHub, or whatever answered in its place, returned a status this broker has no
+reading for.
+Nothing about it says a later attempt fares better, so the client sees
+.Sy 500 .
 .It Ic Unavailable
-Transport failure, an unexpected status, or GitHub not answering within 15
-seconds.
-Retried on the next request.
+Transport failure, or a
+.Sy 500 ,
+.Sy 502 ,
+.Sy 503 ,
+or
+.Sy 504
+GitHub may recover from.
+The client sees
+.Sy 503 .
+.It Ic TimedOut
+GitHub did not answer within 15 seconds.
+The client sees
+.Sy 503 .
+.It Ic RateLimited
+GitHub answered
+.Sy 429 ,
+or
+.Sy 403
+carrying a rate-limit header.
 The client sees
 .Sy 503 .
 .El
 .Pp
-.Ic Unavailable
-alone answers
+.Ic Unavailable ,
+.Ic TimedOut ,
+and
+.Ic RateLimited
+answer
 .Sy 503 ,
-being the one class that clears without anyone acting.
+being the classes that clear without anyone acting and are retried on the next
+request.
 Every other class tells a client to go and look.
 .Pp
 A failed mint always drops whatever that grant had cached, since a token is only
@@ -367,11 +392,15 @@ Check that it is running and that the endpoint matches what it binds.
 .Sy 500 :
 .Ic PermissionDrift ,
 .Ic UntrustworthyResponse ,
+.Ic PrivateKeyUnusable ,
 or
-.Ic PrivateKeyUnusable .
+.Ic UnrecognizedStatus .
 .It Sy 75
 .Sy 503 :
-.Ic Unavailable .
+.Ic Unavailable ,
+.Ic TimedOut ,
+or
+.Ic RateLimited .
 .It Sy 77
 Refused before any mint was attempted, so no class was reached.
 The repository is absent from the allowlist.

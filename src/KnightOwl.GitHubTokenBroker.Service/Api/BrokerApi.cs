@@ -194,6 +194,12 @@ internal static class BrokerApi
     /// an operator acts, so a client can tell them from an outage it should retry.
     /// A rejected App credential is one of them: only clock skew clears without anyone
     /// acting, so retrying the rest never succeeds.
+    /// <para>
+    /// A status the broker has no reading for answers
+    /// <see cref="HttpStatusCode.InternalServerError"/> rather than
+    /// <see cref="HttpStatusCode.ServiceUnavailable"/>: nothing about it says a later
+    /// attempt fares better.
+    /// </para>
     /// </remarks>
     private static HttpStatusCode StatusFor(TokenIssuanceFailure failure)
         => failure switch
@@ -204,7 +210,10 @@ internal static class BrokerApi
             TokenIssuanceFailure.PermissionDrift => HttpStatusCode.InternalServerError,
             TokenIssuanceFailure.UntrustworthyResponse => HttpStatusCode.InternalServerError,
             TokenIssuanceFailure.PrivateKeyUnusable => HttpStatusCode.InternalServerError,
+            TokenIssuanceFailure.UnrecognizedStatus => HttpStatusCode.InternalServerError,
             TokenIssuanceFailure.Unavailable => HttpStatusCode.ServiceUnavailable,
+            TokenIssuanceFailure.TimedOut => HttpStatusCode.ServiceUnavailable,
+            TokenIssuanceFailure.RateLimited => HttpStatusCode.ServiceUnavailable,
         };
 
     private static ILogger Logger(HttpContext context)

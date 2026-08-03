@@ -201,5 +201,35 @@ else
 fi
 
 broker_stop
+fixture_github_stop
+
+# 429: rate limited, which waiting clears.
+if start_broker 429; then
+  run_capture env "GITHUB_TOKEN_BROKER_ENDPOINT=${ENDPOINT}" \
+    github-token gh "${SERVED_REPOSITORY}" -- --version
+
+  assert_eq "a rate limit is retryable rather than a broker fault" 75 "${RUN_STATUS}"
+  assert_contains "and the client says retrying can help" "${RUN_STDERR}" "Retrying"
+else
+  fail_with_log "the broker starts against a rate-limiting GitHub"
+fi
+
+broker_stop
+fixture_github_stop
+
+# 400: the broker and whatever answered it disagreeing about the API, which an
+# operator reads rather than retries.
+if start_broker 400; then
+  run_capture env "GITHUB_TOKEN_BROKER_ENDPOINT=${ENDPOINT}" \
+    github-token gh "${SERVED_REPOSITORY}" -- --version
+
+  assert_eq "a status with no reading is the broker's to report" 70 "${RUN_STATUS}"
+  assert_contains "and the client sends the reader to the log" \
+    "${RUN_STDERR}" "broker log"
+else
+  fail_with_log "the broker starts against a GitHub answering nonsense"
+fi
+
+broker_stop
 
 case_summary
