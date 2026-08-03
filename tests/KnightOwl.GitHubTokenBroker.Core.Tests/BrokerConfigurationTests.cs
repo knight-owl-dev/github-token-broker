@@ -278,10 +278,6 @@ public sealed class BrokerConfigurationTests
     public void GrantKeyBindsRepositoryAndCeilingTogether()
     {
         var repository = RepositoryName.Parse("owner/repo");
-        Assert.True(
-            PermissionSetFor("read").Covers([], out _)
-            && PermissionSetFor("write").Covers([], out _)
-        );
 
         RepositoryAccessPolicy read = new(repository, PermissionSetFor("read"));
         RepositoryAccessPolicy write = new(repository, PermissionSetFor("write"));

@@ -10,7 +10,6 @@ using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 using KnightOwl.GitHubTokenBroker.Service.Api;
 using KnightOwl.GitHubTokenBroker.Service.Application;
 using KnightOwl.GitHubTokenBroker.Service.Application.Ports;
-using KnightOwl.GitHubTokenBroker.Service.Domain.Tokens;
 using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Transport;
 using KnightOwl.GitHubTokenBroker.Service.Tests.Doubles;
 using Microsoft.AspNetCore.Builder;
@@ -26,20 +25,19 @@ namespace KnightOwl.GitHubTokenBroker.Service.Tests;
 /// </summary>
 public sealed class BrokerTransportTests : IAsyncLifetime
 {
-    private const string Token = "ghs_opaqueTokenValue";
+    private const string Token = ScriptedTokenIssuer.TokenValue;
     private const UnixFileMode SocketMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
     private static readonly RepositoryName Allowlisted =
         RepositoryName.Parse("example-owner/example-repo");
 
     private readonly string _root = Directory.CreateTempSubdirectory("hga-tx").FullName;
-    private readonly string _socketPath;
+
+    // Under /tmp (rather than _root) with a truncated GUID: see ListenValidator for the limit.
+    private readonly string _socketPath = Path.Combine("/tmp", $"hga-{Guid.NewGuid():N}"[..20] + ".sock");
+    private readonly ScriptedTokenIssuer _issuer = new();
 
     private WebApplication? _app;
-
-    public BrokerTransportTests()
-        // Short by necessity: a socket path is limited to about 104 bytes.
-        => _socketPath = Path.Combine("/tmp", $"hga-{Guid.NewGuid():N}"[..20] + ".sock");
 
     public async ValueTask InitializeAsync()
     {
@@ -61,14 +59,12 @@ public sealed class BrokerTransportTests : IAsyncLifetime
             )
         );
 
-        builder.Services.AddSingleton<IInstallationTokenIssuer, FixedTokenIssuer>();
+        builder.Services.AddSingleton<IInstallationTokenIssuer>(_issuer);
         builder.Services.AddSingleton<TokenIssuingService>();
 
         // The composition root's own listener setup, so the body limit and the socket
         // are the ones the broker runs with.
-        builder.WebHost.UseBrokerListeners(
-            new ListenOptions(new UnixSocketOptions(_socketPath, SocketMode))
-        );
+        builder.WebHost.UseBrokerListeners(new ListenOptions(new UnixSocketOptions(_socketPath, SocketMode)));
 
         _app = builder.Build();
         _app.MapBrokerApi();
@@ -95,8 +91,7 @@ public sealed class BrokerTransportTests : IAsyncLifetime
     {
         using var client = UnixClient();
 
-        var response =
-            await client.RequestTokenAsync(Allowlisted, CancellationToken.None);
+        var response = await client.RequestTokenAsync(Allowlisted, CancellationToken.None);
 
         Assert.Equal(Token, response.Token);
     }
@@ -125,6 +120,11 @@ public sealed class BrokerTransportTests : IAsyncLifetime
         Assert.Equal(BrokerClientFailure.Refused, failure.Failure);
     }
 
+    /// <remarks>
+    /// /health answers with a status and a repository count, so a token could not
+    /// appear in its body under any implementation. The issuer's counter is where the
+    /// absence is observable, and the paired token request shows it moves at all.
+    /// </remarks>
     [Fact]
     public async Task HealthNeverMints()
     {
@@ -139,7 +139,50 @@ public sealed class BrokerTransportTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("\"status\":\"ok\"", body, StringComparison.Ordinal);
-        Assert.DoesNotContain(Token, body, StringComparison.Ordinal);
+        Assert.Equal(0, _issuer.Mints);
+
+        using var client = UnixClient();
+        await client.RequestTokenAsync(Allowlisted, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, _issuer.Mints);
+    }
+
+    /// <param name="failure">How the mint failed.</param>
+    /// <param name="expected">The status a client is answered with.</param>
+    /// <remarks>
+    /// The middle of the failure chain, which the issuer's own tests and the client's
+    /// each stop short of: a classified mint failure becomes the status a client reads.
+    /// Every class is listed, so moving one between buckets fails here.
+    /// </remarks>
+    [Theory]
+    [InlineData(TokenIssuanceFailure.AppUnauthorized, HttpStatusCode.Conflict)]
+    [InlineData(TokenIssuanceFailure.InstallationForbidden, HttpStatusCode.Conflict)]
+    [InlineData(TokenIssuanceFailure.InstallationOrRepositoryMissing, HttpStatusCode.Conflict)]
+    [InlineData(TokenIssuanceFailure.PermissionDrift, HttpStatusCode.InternalServerError)]
+    [InlineData(TokenIssuanceFailure.UntrustworthyResponse, HttpStatusCode.InternalServerError)]
+    [InlineData(TokenIssuanceFailure.PrivateKeyUnusable, HttpStatusCode.InternalServerError)]
+    [InlineData(TokenIssuanceFailure.Unavailable, HttpStatusCode.ServiceUnavailable)]
+    public async Task ClassifiesMintFailures(TokenIssuanceFailure failure, HttpStatusCode expected)
+    {
+        _issuer.Failure = failure;
+        using var raw = BrokerHttpClientFactory.Create(BrokerEndpoint.Parse($"unix://{_socketPath}"));
+
+        using var response = await raw.PostAsync(
+            new Uri(BrokerV1Routes.TokenPath, UriKind.Relative),
+            new StringContent(
+                $"{{\"host\":\"github.com\",\"repository\":\"{Allowlisted.FullName}\"}}",
+                System.Text.Encoding.UTF8,
+                "application/json"
+            ),
+            TestContext.Current.CancellationToken
+        );
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, response.StatusCode);
+
+        // The status is the whole of what a client is told; the reason is the log's.
+        Assert.Equal("{\"error\":\"token unavailable\"}", body);
     }
 
     [Fact]
@@ -213,32 +256,10 @@ public sealed class BrokerTransportTests : IAsyncLifetime
         // mode failing rather than the method never working.
         var absent = Path.Combine(_root, "absent.sock");
 
-        var failure = Assert.Throws<UnixSocketModeException>(
-            () => BrokerListeners.NarrowUnixSocket(new UnixSocketOptions(absent, SocketMode))
+        var failure = Assert.Throws<UnixSocketModeException>(()
+            => BrokerListeners.NarrowUnixSocket(new UnixSocketOptions(absent, SocketMode))
         );
 
         Assert.Contains(absent, failure.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>Stands in for GitHub, returning one fixed token.</summary>
-    private sealed class FixedTokenIssuer : IInstallationTokenIssuer
-    {
-        public Task<InstallationToken> IssueAsync(
-            RepositoryAccessPolicy policy,
-            CancellationToken cancellationToken
-        )
-        {
-            Assert.True(
-                InstallationToken.TryCreate(
-                    Token,
-                    DateTimeOffset.UtcNow.AddHours(1),
-                    DateTimeOffset.UtcNow,
-                    out var token,
-                    out _
-                )
-            );
-
-            return Task.FromResult(token);
-        }
     }
 }

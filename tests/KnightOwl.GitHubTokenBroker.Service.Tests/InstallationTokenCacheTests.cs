@@ -110,6 +110,62 @@ public sealed class InstallationTokenCacheTests
         }
     }
 
+    /// <remarks>
+    /// The test above builds its callers with LINQ, which enumerates on one thread, so
+    /// the entry's lock is never contended. This one releases eight together, a thread
+    /// each.
+    /// </remarks>
+    [Fact]
+    public async Task CoalescesCallersArrivingAtOnce()
+    {
+        const int callers = 8;
+        InstallationTokenCache cache = new(new TestTimeProvider(Now), Margin);
+        var policy = TestPolicies.Policy();
+        TaskCompletionSource<bool> release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mints = 0;
+
+        // LongRunning gives every caller a thread of its own. Pool threads would do for
+        // the call, but not for the barrier, which needs all of them running at once.
+        using Barrier gate = new(callers);
+
+        // The barrier outlives every use of it: the awaits below do not return until
+        // each thread has come back through SignalAndWait.
+        Task<Task<InstallationToken>>[] entering =
+        [
+            .. Enumerable.Range(0, callers).Select(_ =>
+                Task.Factory.StartNew(
+                    () =>
+                    {
+                        // ReSharper disable once AccessToDisposedClosure
+                        gate.SignalAndWait();
+                        return cache.GetOrIssueAsync(policy, Issue, CancellationToken.None);
+                    },
+                    CancellationToken.None,
+                    TaskCreationOptions.LongRunning,
+                    TaskScheduler.Default
+                )
+            ),
+        ];
+
+        // These complete once each call has returned a task, so every caller has been
+        // through the lock by here. The mint is still held open, so none of them found
+        // a token to be served from: released any earlier, this tests the cache hit.
+        var waiting = await Task.WhenAll(entering);
+        release.SetResult(true);
+        var results = await Task.WhenAll(waiting);
+
+        Assert.Equal(1, mints);
+        Assert.All(results, token => Assert.Same(results[0], token));
+        return;
+
+        async Task<InstallationToken> Issue(RepositoryAccessPolicy _)
+        {
+            Interlocked.Increment(ref mints);
+            await release.Task;
+            return Token(Now.AddHours(1));
+        }
+    }
+
     [Fact]
     public async Task AFailedMintDoesNotPoisonLaterRequests()
     {
@@ -117,7 +173,12 @@ public sealed class InstallationTokenCacheTests
         var policy = TestPolicies.Policy();
         var attempts = 0;
 
-        await Assert.ThrowsAsync<TokenIssuanceException>(() => cache.GetOrIssueAsync(policy, Issue, CancellationToken.None));
+        await Assert.ThrowsAsync<TokenIssuanceException>(() => cache.GetOrIssueAsync(
+                policy,
+                Issue,
+                CancellationToken.None
+            )
+        );
 
         var recovered =
             await cache.GetOrIssueAsync(policy, Issue, CancellationToken.None);
@@ -130,7 +191,9 @@ public sealed class InstallationTokenCacheTests
         {
             attempts++;
             return attempts == 1
-                ? Task.FromException<InstallationToken>(new TokenIssuanceException(TokenIssuanceFailure.Unavailable, "first attempt"))
+                ? Task.FromException<InstallationToken>(
+                    new TokenIssuanceException(TokenIssuanceFailure.Unavailable, "first attempt")
+                )
                 : Task.FromResult(Token(Now.AddHours(1)));
         }
     }
@@ -169,7 +232,6 @@ public sealed class InstallationTokenCacheTests
 
             await release.Task;
             throw new TokenIssuanceException(TokenIssuanceFailure.Unavailable, "shared failure");
-
         }
     }
 
