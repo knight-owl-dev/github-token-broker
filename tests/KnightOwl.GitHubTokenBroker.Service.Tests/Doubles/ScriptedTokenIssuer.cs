@@ -19,9 +19,15 @@ internal sealed class ScriptedTokenIssuer : IInstallationTokenIssuer
     /// <summary>The token every successful mint answers with.</summary>
     public const string TokenValue = "ghs_opaqueTokenValue";
 
+    private readonly Queue<TokenIssuanceFailure> _scripted = new();
+
     private int _mints;
 
     /// <summary>The failure to throw, or <see langword="null"/> to mint.</summary>
+    /// <remarks>
+    /// Read after <see cref="FailOnce"/> has run dry, so a sticky failure and a
+    /// sequence can be set on one issuer.
+    /// </remarks>
     public TokenIssuanceFailure? Failure { get; set; }
 
     /// <summary>How many mints reached this issuer.</summary>
@@ -29,6 +35,18 @@ internal sealed class ScriptedTokenIssuer : IInstallationTokenIssuer
 
     /// <summary>The token the most recent mint was given, for sequential tests.</summary>
     public CancellationToken LastCancellationToken { get; private set; }
+
+    /// <summary>Runs before the mint answers, so a test can make an attempt cost time.</summary>
+    public Action? OnMint { get; set; }
+
+    /// <summary>Queues one failure, to be thrown by the next mint and no later one.</summary>
+    /// <param name="failure">What that mint earns.</param>
+    /// <returns>This issuer, so a sequence reads as one expression.</returns>
+    public ScriptedTokenIssuer FailOnce(TokenIssuanceFailure failure)
+    {
+        _scripted.Enqueue(failure);
+        return this;
+    }
 
     /// <inheritdoc/>
     public Task<InstallationToken> IssueAsync(
@@ -38,6 +56,14 @@ internal sealed class ScriptedTokenIssuer : IInstallationTokenIssuer
     {
         Interlocked.Increment(ref _mints);
         this.LastCancellationToken = cancellationToken;
+        this.OnMint?.Invoke();
+
+        if (_scripted.TryDequeue(out var scripted))
+        {
+            return Task.FromException<InstallationToken>(
+                new TokenIssuanceException(scripted, "scripted failure")
+            );
+        }
 
         if (this.Failure is { } failure)
         {

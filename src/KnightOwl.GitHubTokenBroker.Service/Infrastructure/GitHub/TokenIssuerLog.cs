@@ -1,3 +1,6 @@
+using KnightOwl.GitHubTokenBroker.Service.Application;
+
+
 namespace KnightOwl.GitHubTokenBroker.Service.Infrastructure.GitHub;
 
 /// <summary>
@@ -17,5 +20,16 @@ internal static partial class TokenIssuerLog
         string permissions,
         string keyId,
         DateTimeOffset expiresAt
+    );
+
+    [LoggerMessage(
+        EventId = 2001,
+        Level = LogLevel.Warning,
+        Message = "Attempting the mint for {Repository} again after {Failure}"
+    )]
+    public static partial void RetryingMint(
+        ILogger logger,
+        string repository,
+        TokenIssuanceFailure failure
     );
 }

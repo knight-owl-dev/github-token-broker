@@ -351,8 +351,11 @@ Transport failure, or a
 or
 .Sy 504
 GitHub may recover from.
+These all fail in milliseconds, so the mint is attempted again inside the same
+request for as long as the client's wait affords.
 The client sees
-.Sy 503 .
+.Sy 503
+once those attempts run out.
 .It Ic TimedOut
 GitHub did not answer within 15 seconds.
 The client sees

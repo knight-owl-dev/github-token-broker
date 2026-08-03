@@ -33,18 +33,20 @@ fail_with_log() {
   fail "$1" "${text}"
 }
 
-# start_broker STATUS — a canned GitHub answering with STATUS, and a broker
-# pointed at it. Each call gets a fresh port, so the configuration is rewritten
-# rather than reused.
+# start_broker STATUSES — a canned GitHub answering one comma-separated status per
+# minting request, and a broker pointed at it. A single status is a run of one, so
+# every case reads the same whether or not it needs the broker to attempt twice.
+# Each call gets a fresh port, so the configuration is rewritten rather than reused.
 start_broker() {
-  local status="$1"
-  local name="status-${status}"
+  local statuses="$1"
+  local name="status-${statuses//,/-}"
 
   SCENARIO_ROOT="${WORK}/${name}"
   SCENARIO_SOCKET="${SCENARIO_ROOT}/run/broker.sock"
   mkdir -p "${SCENARIO_ROOT}"
 
-  if ! fixture_github "${SCENARIO_ROOT}" --status "${status}" --token "${TOKEN}"; then
+  if ! fixture_github "${SCENARIO_ROOT}" \
+    --status-sequence "${statuses}" --token "${TOKEN}"; then
     return 1
   fi
 
@@ -228,6 +230,27 @@ if start_broker 400; then
     "${RUN_STDERR}" "broker log"
 else
   fail_with_log "the broker starts against a GitHub answering nonsense"
+fi
+
+broker_stop
+fixture_github_stop
+
+# --- what a retry buys ---------------------------------------------------------
+#
+# The 500 case above is the same failure with no recovery behind it, so the two differ
+# only in what GitHub does second.
+
+if start_broker 500,201; then
+  run_capture env "GITHUB_TOKEN_BROKER_ENDPOINT=${ENDPOINT}" \
+    github-token gh "${SERVED_REPOSITORY}" -- --version
+
+  assert_eq "a mint that failed for want of GitHub is attempted again" 0 "${RUN_STATUS}"
+
+  RETRY_LOG="$(broker_log)"
+  assert_contains "and the log records the attempt it made again" \
+    "${RETRY_LOG}" "again"
+else
+  fail_with_log "the broker starts against a GitHub that recovers"
 fi
 
 broker_stop

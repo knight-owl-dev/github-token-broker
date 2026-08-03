@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Service.Application;
 
 
@@ -15,12 +16,6 @@ internal static class GitHubHttpClientFactory
     /// Keeps DNS from going stale in a process that runs for weeks.
     /// </summary>
     private static readonly TimeSpan ConnectionLifetime = TimeSpan.FromMinutes(5);
-
-    /// <summary>
-    /// How long a request waits. Bounded so a hung request cannot hold a coalesced
-    /// mint open indefinitely.
-    /// </summary>
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>Creates the client for a configured API root.</summary>
     /// <param name="apiBaseUri">The configured API root.</param>
@@ -60,7 +55,7 @@ internal static class GitHubHttpClientFactory
             HttpClient client = new(handler, disposeHandler: true)
             {
                 BaseAddress = baseAddress,
-                Timeout = RequestTimeout,
+                Timeout = BrokerProtocol.MintAttemptTimeout,
             };
 
             // GitHub requires a User-Agent.

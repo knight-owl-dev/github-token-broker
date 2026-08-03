@@ -353,7 +353,7 @@ an operator should check:
 | `UntrustworthyResponse` | the response could not be proven narrow | reported distinctly |
 | `PrivateKeyUnusable` | the key was readable at startup and is not now | reported distinctly |
 | `UnrecognizedStatus` | a status this broker has no reading for | reported distinctly |
-| `Unavailable` | transport failure, or a `500`, `502`, `503`, or `504` | retried on the next request |
+| `Unavailable` | transport failure, or a `500`, `502`, `503`, or `504` | attempted again inside the request, then retried on the next one |
 | `TimedOut` | GitHub did not answer within 15 seconds | retried on the next request |
 | `RateLimited` | `429`, or `403` carrying a rate-limit header | retried on the next request |
 

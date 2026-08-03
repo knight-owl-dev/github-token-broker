@@ -11,8 +11,12 @@ question, and a responder that grew opinions would become a second model of
 GitHub for the two of them to disagree about.
 
 Usage:
-  fake-github.py --port-file PATH [--status N] [--token VALUE] [--app-id N]
+  fake-github.py --port-file PATH [--status N | --status-sequence N,N,...]
+                 [--token VALUE] [--app-id N]
                  [--request-log PATH] [--permissions a=b,c=d]
+
+A sequence answers one status per minting request and then repeats its last, so a
+case can show a mint recovering without depending on how many attempts it took.
 
 The port is ephemeral and written to --port-file once bound, so cases never
 race for a fixed one.
@@ -77,9 +81,25 @@ def inspect_jwt(authorization, app_id):
     return None
 
 
+def parse_statuses(sequence, single):
+    """The statuses to answer with, in order. A bare --status is a run of one."""
+    if not sequence:
+        return [single]
+    return [int(value) for value in sequence.split(",") if value.strip()]
+
+
 def build_handler(options):
     permissions = parse_permissions(options.permissions)
+    statuses = parse_statuses(options.status_sequence, options.status)
     lock = threading.Lock()
+    answered = [0]
+
+    def next_status():
+        """One status per minting request, the last of them repeating."""
+        with lock:
+            index = min(answered[0], len(statuses) - 1)
+            answered[0] += 1
+            return statuses[index]
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -112,8 +132,9 @@ def build_handler(options):
                 self.answer(404, {"message": "Not Found"})
                 return
 
-            if options.status != 201:
-                self.answer(options.status, {"message": "canned failure"})
+            status = next_status()
+            if status != 201:
+                self.answer(status, {"message": "canned failure"})
                 return
 
             requested = json.loads(body).get("repositories") or ["unknown"]
@@ -146,6 +167,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port-file", required=True)
     parser.add_argument("--status", type=int, default=201)
+    parser.add_argument("--status-sequence")
     parser.add_argument("--token", default="ghs-integration-token")
     parser.add_argument("--owner", default="integration-owner")
     parser.add_argument("--app-id", type=int, default=123456)

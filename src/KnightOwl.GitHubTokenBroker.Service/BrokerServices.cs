@@ -1,8 +1,10 @@
 using KnightOwl.GitHubTokenBroker.Domain.Access;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Configuration;
+using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Service.Application;
 using KnightOwl.GitHubTokenBroker.Service.Application.Ports;
 using KnightOwl.GitHubTokenBroker.Service.Infrastructure.GitHub;
+using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Resilience;
 using KnightOwl.GitHubTokenBroker.Service.Infrastructure.Signing;
 
 
@@ -13,6 +15,13 @@ namespace KnightOwl.GitHubTokenBroker.Service;
 /// </summary>
 internal static class BrokerServices
 {
+    /// <summary>
+    /// How long to wait between mint attempts. An immediate retry tends to reach
+    /// whatever answered the first one.
+    /// </summary>
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
+
+
     /// <param name="services">The collection to register into.</param>
     extension(IServiceCollection services)
     {
@@ -50,13 +59,23 @@ internal static class BrokerServices
 
             services.AddSingleton<TokenIssuingService>();
 
+            // Retry wraps the issuer rather than living in it, so the issuer stays the
+            // one component that reaches GitHub.
             services.AddSingleton<IInstallationTokenIssuer>(provider =>
-                new GitHubInstallationTokenIssuer(
-                    GitHubHttpClientFactory.Create(configuration.ApiBaseUri),
-                    provider.GetRequiredService<IAppJwtFactory>(),
-                    provider.GetRequiredService<TimeProvider>(),
-                    configuration.InstallationId,
-                    provider.GetRequiredService<ILogger<GitHubInstallationTokenIssuer>>()
+                new RetryingTokenIssuer(
+                    new GitHubInstallationTokenIssuer(
+                        GitHubHttpClientFactory.Create(configuration.ApiBaseUri),
+                        provider.GetRequiredService<IAppJwtFactory>(),
+                        provider.GetRequiredService<TimeProvider>(),
+                        configuration.InstallationId,
+                        provider.GetRequiredService<ILogger<GitHubInstallationTokenIssuer>>()
+                    ),
+                    new RetryBudget(
+                        provider.GetRequiredService<TimeProvider>(),
+                        BrokerProtocol.MintRetryBudget,
+                        RetryDelay
+                    ),
+                    provider.GetRequiredService<ILogger<RetryingTokenIssuer>>()
                 )
             );
         }

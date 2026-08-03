@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
+using KnightOwl.GitHubTokenBroker.Infrastructure.Contracts;
 using KnightOwl.GitHubTokenBroker.Infrastructure.Transport;
 
 
@@ -11,12 +12,6 @@ namespace KnightOwl.GitHubTokenBroker.Cli.Infrastructure.Broker;
 /// </summary>
 public static class BrokerHttpClientFactory
 {
-    /// <summary>
-    /// How long a client waits. Generous enough to cover a cold mint against GitHub,
-    /// short enough that a wedged broker fails a Git operation rather than hanging it.
-    /// </summary>
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
-
     /// <summary>Creates a client bound to the endpoint.</summary>
     /// <param name="endpoint">The broker endpoint to reach.</param>
     /// <returns>A client the caller owns and must dispose.</returns>
@@ -65,7 +60,7 @@ public static class BrokerHttpClientFactory
             return new HttpClient(handler, disposeHandler: true)
             {
                 BaseAddress = endpoint.BaseUri,
-                Timeout = RequestTimeout,
+                Timeout = BrokerProtocol.ClientRequestTimeout,
             };
         }
         catch
