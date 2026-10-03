@@ -44,6 +44,17 @@ fixture_github() {
   FAKE_GITHUB_PID=$!
 
   if ! wait_for 10 test -s "${FAKE_GITHUB_PORT_FILE}"; then
+    if kill -0 "${FAKE_GITHUB_PID}" 2> /dev/null; then
+      local python version
+      python="$(command -v python3)" || python="python3"
+      version="$(python3 --version 2>&1)" || version="no version"
+      echo "The canned GitHub wrote no port within 10s, under ${python} (${version})." >&2
+    else
+      local status=0
+      wait "${FAKE_GITHUB_PID}" || status=$?
+      echo "The canned GitHub exited with status ${status} before writing a port." >&2
+      FAKE_GITHUB_PID=""
+    fi
     return 1
   fi
 
