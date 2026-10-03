@@ -494,7 +494,7 @@ this host or across the Linux images pinned in
 `tests/integration/container/images.json`. Behavior that differs by platform,
 such as a syscall error code, is only proven there.
 
-Artifacts are Native AOT binaries for `osx-arm64`, `osx-x64`, `linux-x64`, and
+Artifacts are Native AOT binaries for `osx-arm64`, `linux-x64`, and
 `linux-arm64`: real executables with no runtime to install, roughly 13 MB for
 the service and 5.5 MB for the client. The client starts in about four
 milliseconds, which is the figure that matters, because Git spawns the

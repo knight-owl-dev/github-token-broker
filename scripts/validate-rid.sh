@@ -46,12 +46,12 @@ if [[ "${LINUX_ONLY}" == true ]]; then
   esac
 else
   case "${RID}" in
-    osx-arm64 | osx-x64 | linux-x64 | linux-arm64)
+    osx-arm64 | linux-x64 | linux-arm64)
       echo "${RID}"
       ;;
     *)
       echo "ERROR: Invalid RID: ${RID}" >&2
-      echo "Supported RIDs: osx-arm64, osx-x64, linux-x64, linux-arm64" >&2
+      echo "Supported RIDs: osx-arm64, linux-x64, linux-arm64" >&2
       exit 1
       ;;
   esac
