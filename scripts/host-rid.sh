@@ -40,7 +40,7 @@ case "${HOST_ARCH}" in
     ARCH="arm64"
     ;;
   *)
-    echo "ERROR: Unsupported host architecture: ${HOST_ARCH}" >&2
+    echo "ERROR: unsupported host architecture: ${HOST_ARCH}" >&2
     exit 1
     ;;
 esac
@@ -59,7 +59,7 @@ case "${HOST_OS}" in
     "${SCRIPT_DIR}/validate-rid.sh" "osx-${ARCH}"
     ;;
   *)
-    echo "ERROR: Unsupported host operating system: ${HOST_OS}" >&2
+    echo "ERROR: unsupported host operating system: ${HOST_OS}" >&2
     exit 1
     ;;
 esac

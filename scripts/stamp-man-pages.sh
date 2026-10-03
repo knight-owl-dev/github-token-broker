@@ -16,7 +16,7 @@ build_props="${repository_root}/Directory.Build.props"
 version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "${build_props}" | head -n 1)"
 
 if [[ -z ${version} ]]; then
-  echo "ERROR: No <Version> in ${build_props}." >&2
+  echo "ERROR: no <Version> in ${build_props}" >&2
   exit 1
 fi
 
@@ -35,7 +35,7 @@ for page in "${source_root}"/man*/*.[0-9]; do
 done
 
 if [[ ${stamped} -eq 0 ]]; then
-  echo "ERROR: No man pages under ${source_root}." >&2
+  echo "ERROR: no man pages under ${source_root}" >&2
   exit 1
 fi
 

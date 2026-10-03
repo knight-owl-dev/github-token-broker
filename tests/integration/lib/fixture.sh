@@ -48,11 +48,11 @@ fixture_github() {
       local python version
       python="$(command -v python3)" || python="python3"
       version="$(python3 --version 2>&1)" || version="no version"
-      echo "The canned GitHub wrote no port within 10s, under ${python} (${version})" >&2
+      echo "WARN: the canned GitHub wrote no port within 10s, under ${python} (${version})" >&2
     else
       local status=0
       wait "${FAKE_GITHUB_PID}" || status=$?
-      echo "The canned GitHub exited with status ${status} before writing a port" >&2
+      echo "WARN: the canned GitHub exited with status ${status} before writing a port" >&2
       FAKE_GITHUB_PID=""
     fi
     return 1
@@ -110,7 +110,7 @@ fixture_config() {
         shift 2
         ;;
       *)
-        echo "fixture_config: unknown option $1" >&2
+        echo "ERROR: fixture_config: unknown option: $1" >&2
         return 1
         ;;
     esac

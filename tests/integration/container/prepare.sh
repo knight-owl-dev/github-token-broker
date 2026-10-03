@@ -53,7 +53,7 @@ elif command -v dnf > /dev/null 2>&1; then
     util-linux
   dnf clean all
 else
-  echo "ERROR: No supported package manager (looked for apt-get and dnf)" >&2
+  echo "ERROR: no supported package manager (looked for apt-get and dnf)" >&2
   exit 1
 fi
 
@@ -68,7 +68,7 @@ case "${MACHINE}" in
     GH_ARCH="arm64"
     ;;
   *)
-    echo "ERROR: Unsupported architecture: ${MACHINE}" >&2
+    echo "ERROR: unsupported architecture: ${MACHINE}" >&2
     exit 1
     ;;
 esac

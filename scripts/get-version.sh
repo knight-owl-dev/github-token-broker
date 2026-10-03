@@ -26,7 +26,7 @@ PROPS_PATH="${REPO_ROOT}/Directory.Build.props"
 VERSION="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "${PROPS_PATH}" | head -n 1)"
 
 if [[ -z "${VERSION}" ]]; then
-  echo "ERROR: Could not read <Version> from ${PROPS_PATH}" >&2
+  echo "ERROR: could not read <Version> from ${PROPS_PATH}" >&2
   exit 1
 fi
 

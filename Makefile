@@ -94,7 +94,7 @@ test: ## Run the test suite
 	@dotnet test $(SOLUTION)
 
 publish: ## Publish native binaries for RID (default: this machine's)
-	@test -n "$(RID)" || { echo "ERROR: No RID; host-rid.sh said why above." >&2; exit 1; }
+	@test -n "$(RID)" || { echo "ERROR: no RID; host-rid.sh said why above" >&2; exit 1; }
 	@dotnet publish src/KnightOwl.GitHubTokenBroker.Service -c Release -r $(RID)
 	@dotnet publish src/KnightOwl.GitHubTokenBroker.Cli -c Release -r $(RID)
 
