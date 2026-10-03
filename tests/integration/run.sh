@@ -126,10 +126,9 @@ CLI_BINARY="${CLI_DIR}/github-token"
 
 echo "Integration suite: ${ENVIRONMENT}, ${RID}, ${TFM}"
 
-# Publishing runs every time, not only when the binaries are missing: both this
-# and the container build are incremental, and a suite that silently tests a
-# stale artifact reports on code that is no longer there. A CI job holding a
-# downloaded artifact has no SDK and keeps what it was given.
+# Publishing runs every time, not only when the binaries are missing: a suite
+# that silently tests a stale artifact reports on code that is no longer there.
+# A CI job holding a downloaded artifact has no SDK and keeps what it was given.
 echo ""
 if [[ "${RID}" == linux-* && "${HOST_OS}" != "Linux" ]]; then
   # Native AOT links with the host's toolchain, so macOS cannot target Linux.
@@ -141,7 +140,16 @@ if [[ "${RID}" == linux-* && "${HOST_OS}" != "Linux" ]]; then
   # image stops the run, rather than being swallowed by the argument list.
   BUILD_IMAGE="$("${CONTAINER_DIR}/build-image.sh")"
 
-  docker build \
+  # A builder of its own, removed with its cache once the binaries are out: on
+  # the shared one, the publish leaves gigabytes that routine pruning cannot
+  # reclaim, evicting other projects' caches. A warm cache would only spare a
+  # rerun with nothing changed.
+  BUILDER="github-token-broker-publish-$$"
+  trap 'docker buildx rm --force "${BUILDER}" > /dev/null 2>&1 || true' EXIT
+  docker buildx create --name "${BUILDER}" --driver docker-container > /dev/null
+
+  docker buildx build \
+    --builder "${BUILDER}" \
     --file "${CONTAINER_DIR}/Dockerfile.publish" \
     --target export \
     --output "type=local,dest=${REPO_ROOT}" \
@@ -149,6 +157,9 @@ if [[ "${RID}" == linux-* && "${HOST_OS}" != "Linux" ]]; then
     --build-arg "RID=${RID}" \
     --build-arg "TFM=${TFM}" \
     "${REPO_ROOT}"
+
+  docker buildx rm "${BUILDER}" > /dev/null
+  trap - EXIT
 elif command -v dotnet > /dev/null 2>&1; then
   printf '%sPublishing %s%s\n' "${FORMAT_BOLD}" "${RID}" "${FORMAT_RESET}"
   make -C "${REPO_ROOT}" publish RID="${RID}"
