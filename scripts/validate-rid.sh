@@ -39,8 +39,8 @@ if [[ "${LINUX_ONLY}" == true ]]; then
       echo "${RID}"
       ;;
     *)
-      echo "ERROR: Invalid Linux RID: ${RID}" >&2
-      echo "Supported Linux RIDs: linux-x64, linux-arm64" >&2
+      echo "ERROR: invalid Linux RID: ${RID}" >&2
+      echo "  Supported Linux RIDs: linux-x64, linux-arm64" >&2
       exit 1
       ;;
   esac
@@ -50,8 +50,8 @@ else
       echo "${RID}"
       ;;
     *)
-      echo "ERROR: Invalid RID: ${RID}" >&2
-      echo "Supported RIDs: osx-arm64, linux-x64, linux-arm64" >&2
+      echo "ERROR: invalid RID: ${RID}" >&2
+      echo "  Supported RIDs: osx-arm64, linux-x64, linux-arm64" >&2
       exit 1
       ;;
   esac

@@ -31,14 +31,14 @@ BUILD_IMAGE="$(sed -n 's/.*"buildImage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1
   "${GLOBAL_JSON}" | head -n 1)"
 
 if [[ -z "${SDK_VERSION}" || -z "${BUILD_IMAGE}" ]]; then
-  echo "ERROR: Could not read sdk.version and knightOwl.buildImage from ${GLOBAL_JSON}" >&2
+  echo "ERROR: could not read sdk.version and knightOwl.buildImage from ${GLOBAL_JSON}" >&2
   exit 1
 fi
 
 if [[ "${BUILD_IMAGE}" != *":${SDK_VERSION}-"* ]]; then
   echo "ERROR: knightOwl.buildImage does not carry sdk.version ${SDK_VERSION}" >&2
   echo "  ${BUILD_IMAGE}" >&2
-  echo "Refresh it with: docker buildx imagetools inspect IMAGE:TAG" >&2
+  echo "  Refresh it with: docker buildx imagetools inspect IMAGE:TAG" >&2
   exit 1
 fi
 

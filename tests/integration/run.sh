@@ -71,7 +71,7 @@ fi
 # thing than was asked for.
 if [[ "${ALL_IMAGES}" == true && "${ENVIRONMENT}" != "container" ]]; then
   echo "ERROR: --all-images selects among the container run images," >&2
-  echo "       and the host environment tests this machine alone" >&2
+  echo "  and the host environment tests this machine alone" >&2
   exit 1
 fi
 
@@ -86,7 +86,7 @@ if [[ "${ENVIRONMENT}" == "container" ]]; then
   fi
 
   if ! selected="$(jq -r "${selector}" "${IMAGES_JSON}")"; then
-    echo "ERROR: Could not read ${IMAGES_JSON}" >&2
+    echo "ERROR: could not read ${IMAGES_JSON}" >&2
     exit 1
   fi
 
@@ -97,7 +97,7 @@ if [[ "${ENVIRONMENT}" == "container" ]]; then
   done <<< "${selected}"
 
   if [[ "${#IMAGES[@]}" -eq 0 ]]; then
-    echo "ERROR: No images selected from ${IMAGES_JSON}" >&2
+    echo "ERROR: no images selected from ${IMAGES_JSON}" >&2
     exit 1
   fi
 fi
@@ -170,7 +170,7 @@ fi
 
 for binary in "${SERVICE_BINARY}" "${CLI_BINARY}"; do
   if [[ ! -x "${binary}" ]]; then
-    echo "ERROR: Missing executable after publish: ${binary}" >&2
+    echo "ERROR: missing executable after publish: ${binary}" >&2
     exit 1
   fi
 done

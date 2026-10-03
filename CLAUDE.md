@@ -21,14 +21,17 @@ installation tokens, and a client that supplies them to Git and the GitHub CLI.
 - `ENV=host|container` picks where a recipe runs and defaults to `host`.
   Anything `make lint` invokes has to exist in `ghcr.io/knight-owl-dev/ci-tools`,
   or it passes here and fails in CI.
-- A message a person reads is a sentence: capitalized, ending in a period, and
-  worded so a literal config key or path never starts one. **Every exception
-  message is one**, whoever ends up reading it — a thrower does not get to assume
-  its consumer. A string composed into another message stays a lowercase fragment
-  with no terminal period — the `out string? error` of a domain `Try*` method, and
-  a value passed as a `LoggerMessage` argument.
+- In the binaries, a message a person reads is a sentence: capitalized, ending in
+  a period, and worded so a literal config key or path never starts one. **Every
+  exception message is one**, whoever ends up reading it — a thrower does not get
+  to assume its consumer. A string composed into another message stays a
+  lowercase fragment with no terminal period — the `out string? error` of a
+  domain `Try*` method, and a value passed as a `LoggerMessage` argument.
 - A wrapped exception keeps its own wording; `DiagnosticReport` prints the chain
   rather than splicing an inner message into ours.
+- Tooling — the Makefile, scripts, workflows, and the integration suite — prints
+  lines: no terminal punctuation, an `ERROR:` or `WARN:` label on stderr with the
+  text after it lowercase, continuations indented two spaces.
 - The man pages own the reference material — commands, settings, exit statuses.
   Prose links to `github-token(1)`, `github-token-broker-config(5)`, or
   `github-token-broker(8)` rather than restating them. `README.md` still carries

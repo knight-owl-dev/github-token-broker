@@ -15,7 +15,7 @@ if [[ -z ${page} ]]; then
   available="$(find "${man_root}" -type f -name '*.[0-9]' -exec basename {} \; \
     | sed 's/\.[0-9]$//' | sort | tr '\n' ' ')"
 
-  echo "ERROR: No man page \"${name}\". Available: ${available}" >&2
+  echo "ERROR: no man page \"${name}\". Available: ${available}" >&2
   exit 1
 fi
 

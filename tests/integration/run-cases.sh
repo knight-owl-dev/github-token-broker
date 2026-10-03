@@ -54,7 +54,7 @@ for path in "${SCRIPT_DIR}"/cases/*.sh; do
 done
 
 if [[ "${#cases[@]}" -eq 0 ]]; then
-  echo "ERROR: No cases matched" >&2
+  echo "ERROR: no cases matched" >&2
   exit 1
 fi
 
