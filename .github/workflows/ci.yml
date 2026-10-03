@@ -23,6 +23,10 @@ jobs:
     container: ghcr.io/knight-owl-dev/ci-tools:v1.6.1@sha256:822d75b014b3de9859297439df2d31b3a761a293db5d0b1874cd18c77f03068f
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The job runs as root on a checkout the runner's account owns, and
+      # checkout's own safe.directory entry is gone once it finishes.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
       - name: Lint
         env:
           # Unauthenticated, validate-action-pins gets 60 requests an hour, and
