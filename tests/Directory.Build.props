@@ -17,10 +17,9 @@
         <!-- VSTHRD200: test names read as sentences rather than carrying an Async suffix -->
         <NoWarn>$(NoWarn);CS1591;CA1062;CA1812;CA2000;VSTHRD003;VSTHRD200</NoWarn>
 
-        <!-- xUnit v3 runs on Microsoft.Testing.Platform: no VSTest host, and each test
-             project is a directly runnable executable that starts in milliseconds -->
+        <!-- Hosts each test executable on Microsoft.Testing.Platform, the runner
+             global.json gives dotnet test; without it, a direct run gets xUnit's own -->
         <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
-        <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     </PropertyGroup>
 
     <ItemGroup>

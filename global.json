@@ -3,6 +3,9 @@
     "version": "10.0.401",
     "rollForward": "latestPatch"
   },
+  "test": {
+    "runner": "Microsoft.Testing.Platform"
+  },
   "knightOwl": {
     "buildImage": "mcr.microsoft.com/dotnet/sdk:10.0.401-noble-aot@sha256:88446bc2708f037046d48ef2bd77c437e981ca01229d7005ac2016ec42e05347"
   }

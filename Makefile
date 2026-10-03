@@ -91,7 +91,7 @@ clean: ## Remove build output
 	@rm -rf artifacts
 
 test: ## Run the test suite
-	@dotnet test $(SOLUTION)
+	@dotnet test --solution $(SOLUTION)
 
 publish: ## Publish native binaries for RID (default: this machine's)
 	@test -n "$(RID)" || { echo "ERROR: no RID; host-rid.sh said why above" >&2; exit 1; }
