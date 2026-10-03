@@ -22,7 +22,7 @@ set -euo pipefail
 #   1 - No supported package manager, or an unsupported architecture
 #
 
-GH_VERSION="2.97.0"
+GH_VERSION="2.102.0"
 
 if command -v apt-get > /dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
