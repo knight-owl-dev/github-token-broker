@@ -16,7 +16,7 @@ taking only `prepare.sh` and `images.json`.
 
 | File | |
 | --- | --- |
-| `images.json` | the distros, pinned by digest; one is the glibc floor |
+| `images.json` | the distros, pinned by digest; one is the glibc floor, and `deb` marks those the release installs its package on |
 | `prepare.sh` | packages, the GitHub CLI, and the accounts the socket cases need |
 | `Dockerfile` | the run image: a distro, `prepare.sh`, and the two executables |
 | `Dockerfile.publish` | a Linux host for `make publish`, for a machine that is not one |
