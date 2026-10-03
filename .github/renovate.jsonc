@@ -1,0 +1,116 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // config:recommended is not extended: its presets address ecosystems this
+  // repo does not have.
+  "extends": ["docker:pinDigests"],
+
+  "dependencyDashboard": true,
+
+  // Commit subjects here are plain imperative sentences.
+  "semanticCommits": "disabled",
+
+  // No `schedule` here: renovate.yml's cron owns when this runs.
+  "prConcurrentLimit": 5,
+
+  // A weekly run under the default hourly cap leaves every update past the
+  // second for next week; prConcurrentLimit already bounds the CI load.
+  "prHourlyLimit": 0,
+
+  "customManagers": [
+    {
+      // The github-runners manager reads `runs-on:` alone, so matrix legs
+      // would be stranded when a new image lands. The capture groups mirror
+      // what that manager extracts: depName "ubuntu", currentValue "26.04-arm".
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "matchStrings": ["runner: (?<depName>ubuntu|macos)-(?<currentValue>\\S+)"],
+      "datasourceTemplate": "github-runners",
+      "autoReplaceStringTemplate": "runner: {{depName}}-{{newValue}}"
+    },
+    {
+      // The SDK image the Linux binaries are published in, beside the SDK
+      // version it provides.
+      "customType": "regex",
+      "managerFilePatterns": ["/^global\\.json$/"],
+      "matchStrings": ["\"buildImage\":\\s*\"(?<depName>[^:\"]+):(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""],
+      "datasourceTemplate": "docker"
+    },
+    {
+      // The distros the integration suite runs on.
+      "customType": "regex",
+      "managerFilePatterns": ["/^tests/integration/container/images\\.json$/"],
+      "matchStrings": ["\"image\":\\s*\"(?<depName>[^:\"]+):(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""],
+      "datasourceTemplate": "docker"
+    },
+    {
+      // The GitHub CLI the integration cases install.
+      "customType": "regex",
+      "managerFilePatterns": ["/^tests/integration/container/prepare\\.sh$/"],
+      "matchStrings": ["GH_VERSION=\"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "cli/cli",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    }
+  ],
+
+  "packageRules": [
+    {
+      "matchDatasources": ["nuget"],
+      "labels": ["dependencies", ".NET"]
+    },
+    {
+      "matchDatasources": ["nuget"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "NuGet (minor and patch)"
+    },
+
+    {
+      "matchDatasources": ["docker", "github-releases"],
+      "labels": ["dependencies"]
+    },
+
+    // global.json's SDK and the image that provides it move in one PR:
+    // build-image.sh refuses either without the other.
+    {
+      "matchDatasources": ["dotnet-version", "docker"],
+      "matchPackageNames": ["dotnet-sdk", "mcr.microsoft.com/dotnet/sdk"],
+      "groupName": ".NET SDK",
+      "labels": ["dependencies", ".NET"]
+    },
+    // A major is a TFM change, which a global.json-only PR cannot complete.
+    {
+      "matchDatasources": ["dotnet-version", "docker"],
+      "matchPackageNames": ["dotnet-sdk", "mcr.microsoft.com/dotnet/sdk"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+
+    // A distro's tag is the floor it proves, and its name is a required check,
+    // so only its digest moves here.
+    {
+      "matchFileNames": ["tests/integration/container/images.json"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "enabled": false
+    },
+
+    {
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["action"],
+      "labels": ["dependencies", "github-actions"]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["action"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "actions (minor and patch)"
+    },
+
+    // Matched by datasource, not manager: the matrix legs come from a custom
+    // manager.
+    {
+      "matchDatasources": ["github-runners"],
+      "labels": ["dependencies", "github-actions"]
+    }
+  ]
+}
