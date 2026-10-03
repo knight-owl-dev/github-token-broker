@@ -116,7 +116,9 @@ lint-fix: lint-dotnet-fix lint-shfmt-fix ## Auto-fix formatting issues (host onl
 	@echo "Note: shellcheck and markdownlint issues must be fixed manually"
 	@echo "OK"
 
-lint-dotnet: ## Check C# code formatting (host only)
+lint-dotnet: ## Check C# formatting, and that the lock files match (host only)
+	@echo "Checking lock files (dotnet restore --locked-mode)..."
+	@dotnet restore $(SOLUTION) --locked-mode --verbosity quiet
 	@echo "Checking C# formatting (dotnet format)..."
 	@dotnet format --verify-no-changes
 	@echo "OK"

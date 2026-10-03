@@ -5,7 +5,7 @@
   "useGitignore": true,
   "allowCompoundWords": true,
   "files": [
-    "**/*.{cs,md,json,props,yml,yaml,sh,bats}"
+    "**/*.{cs,md,json,jsonc,props,yml,yaml,sh,bats}"
   ],
   "words": [
     "AOTs",
