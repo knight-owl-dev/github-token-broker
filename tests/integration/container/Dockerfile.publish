@@ -6,7 +6,7 @@
 # what comes out is indistinguishable from what `make publish` leaves behind.
 #
 # run.sh supplies BUILD_IMAGE from global.json, where it is pinned by digest.
-ARG BUILD_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0-noble-aot
+ARG BUILD_IMAGE
 
 FROM ${BUILD_IMAGE} AS build
 
