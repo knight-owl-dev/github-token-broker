@@ -33,6 +33,14 @@ Analyze the description to determine whether this is a **bug** or **task/enhance
 - Describes new functionality or improvements
 - Focuses on goals and outcomes
 
+Then pick the GitHub Issue Type, set with `--type`:
+
+| Type      | When                                                   |
+|-----------|--------------------------------------------------------|
+| `Bug`     | A bug report                                           |
+| `Feature` | A task that gives users a capability they lack         |
+| `Task`    | Any other task: CI, tooling, docs, refactoring, chores |
+
 ### 3. Suggest Labels
 
 Based on the description, recommend applicable labels from this list:
@@ -54,7 +62,7 @@ Always suggest at least one primary label (`bug`, `enhancement`, or `documentati
 
 Use AskUserQuestion to confirm the issue type and labels:
 
-- Show the determined issue type (Bug or Task/Enhancement)
+- Show the determined issue type (`Bug`, `Feature`, or `Task`)
 - Show the recommended labels
 - Allow the user to adjust before proceeding
 
@@ -126,6 +134,7 @@ Create a clear, concise title that:
 Show the user a preview of:
 
 - Title
+- Type
 - Labels
 - Body content
 
@@ -138,6 +147,7 @@ Use the gh CLI to create the issue:
 ```bash
 gh issue create \
   --repo knight-owl-dev/github-token-broker \
+  --type "<type>" \
   --label "<labels>" \
   --title "<title>" \
   --body "<body>"
@@ -148,10 +158,5 @@ gh issue create \
 After successful creation:
 
 - Display the issue URL
-- Note that Issue Types must be set manually (gh CLI doesn't support this yet)
-- Ask if the user wants to open the issue in browser to set the type:
-  ```bash
-  gh issue view <issue-number> --repo knight-owl-dev/github-token-broker --web
-  ```
 - Offer to create a branch for the issue (using GitHub's naming convention:
   `<issue-number>-<issue-title-slug>`)

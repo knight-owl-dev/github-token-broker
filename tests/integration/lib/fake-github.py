@@ -25,6 +25,7 @@ race for a fixed one.
 import argparse
 import base64
 import json
+import socketserver
 import sys
 import threading
 import time
@@ -86,6 +87,14 @@ def parse_statuses(sequence, single):
     if not sequence:
         return [single]
     return [int(value) for value in sequence.split(",") if value.strip()]
+
+
+class LoopbackServer(ThreadingHTTPServer):
+    # HTTPServer names itself by a reverse lookup of the address it bound, and
+    # that hangs on a macOS CI runner before the port can be written.
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 def build_handler(options):
@@ -175,7 +184,7 @@ def main():
     parser.add_argument("--request-log")
     options = parser.parse_args()
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler(options))
+    server = LoopbackServer(("127.0.0.1", 0), build_handler(options))
 
     # Written only once the port is real, so a case that sees the file can
     # connect. ApiUrlValidator permits plaintext against loopback alone, which

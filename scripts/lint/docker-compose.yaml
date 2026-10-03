@@ -10,7 +10,6 @@ services:
     user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
     working_dir: /workspace
     read_only: true
-    network_mode: none
     cap_drop:
       - ALL
     security_opt:

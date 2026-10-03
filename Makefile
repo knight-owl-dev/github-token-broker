@@ -11,6 +11,13 @@
 # Makefile syntax: NAME=value, unquoted. The command line outranks it.
 -include .env
 
+# The scripts are written for bash 5, and macOS ships 3.2 as /bin/bash. Checked
+# here because reading this file already runs one.
+BASH_MAJOR := $(shell bash -c 'echo $${BASH_VERSINFO[0]}' 2>/dev/null)
+ifeq ($(filter-out 0 1 2 3 4,$(BASH_MAJOR)),)
+$(error The scripts need bash 5 or newer, and the bash on PATH is version $(or $(BASH_MAJOR),unknown). On macOS, run "brew install bash")
+endif
+
 .PHONY: help restore build clean test publish integration-test man man-build \
 	lint lint-tools lint-fix lint-dotnet lint-dotnet-fix lint-shfmt lint-shfmt-fix \
 	lint-shellcheck lint-actions lint-markdown lint-spelling lint-docker lint-control-characters \
@@ -22,6 +29,10 @@
 SHELL_SCRIPTS := $(shell find scripts tests \( -name '*.sh' -o -name '*.bats' \) -type f 2>/dev/null)
 
 DOCKERFILES := $(shell find tests -name 'Dockerfile*' -not -name '*.dockerignore' 2>/dev/null)
+
+# actionlint reads workflows only; the pin check reads composite actions too.
+WORKFLOWS := $(wildcard .github/workflows/*.yml)
+ACTIONS := $(wildcard .github/actions/*/action.yml)
 
 # Linted as sources. Rendered and packaged from artifacts/man, where man-build
 # replaces their @VERSION@ placeholder.
@@ -55,8 +66,9 @@ endif
 
 LINT_COMPOSE = docker compose -p github-token-broker-lint --file scripts/lint/docker-compose.yaml
 
-# Run images live in tests/integration/images.json, which the CI matrix reads
-# directly. ENV=container runs the glibc floor alone; ALL=1 runs every image.
+# Run images live in tests/integration/container/images.json, which the CI
+# matrix reads directly. ENV=container runs the glibc floor alone; ALL=1 runs
+# every image.
 # Narrow the cases with CASES="01-socket-mode".
 ALL ?=
 CASES ?=
@@ -149,10 +161,8 @@ lint-shellcheck: ## Run shellcheck on shell scripts
 
 lint-actions: ## Validate workflows, and that SHA pins match their tags
 	@echo "Checking GitHub Actions workflows (actionlint, validate-action-pins)..."
-	@if ls .github/workflows/*.yml >/dev/null 2>&1; then \
-		actionlint .github/workflows/*.yml \
-		&& validate-action-pins .github/workflows/*.yml; \
-	else echo "  no workflows yet"; fi
+	@actionlint $(WORKFLOWS)
+	@validate-action-pins $(WORKFLOWS) $(ACTIONS)
 	@echo "OK"
 
 lint-markdown: ## Check Markdown file formatting

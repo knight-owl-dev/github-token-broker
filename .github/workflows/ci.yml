@@ -1,0 +1,165 @@
+name: CI
+
+# No push run: main's ruleset admits only up-to-date, green PRs, so it would
+# re-test the same tree.
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-dotnet:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-dotnet
+      - name: Lint
+        run: make lint-dotnet
+
+  lint:
+    runs-on: ubuntu-26.04-arm
+    container: ghcr.io/knight-owl-dev/ci-tools:v1.6.1@sha256:822d75b014b3de9859297439df2d31b3a761a293db5d0b1874cd18c77f03068f
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The job runs as root on a checkout the runner's account owns, and
+      # checkout's own safe.directory entry is gone once it finishes.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+      - name: Lint
+        env:
+          # Unauthenticated, validate-action-pins gets 60 requests an hour, and
+          # a spent budget warns and passes.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make lint SKIP=lint-dotnet
+
+  # Check names carry the platform, not the runner label, so a runner bump does
+  # not rename a required check.
+  test:
+    name: test (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-26.04
+          - platform: macos
+            runner: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-dotnet
+      # The Makefile needs bash 5; macOS ships 3.2.
+      - name: Install bash
+        if: runner.os == 'macOS'
+        run: brew install bash
+      - name: Test
+        run: make test
+
+  # `container:` cannot read a file, so the pinned SDK image and the distro list
+  # reach the jobs below as outputs.
+  resolve:
+    runs-on: ubuntu-26.04-arm
+    outputs:
+      build-image: ${{ steps.read.outputs.build-image }}
+      images: ${{ steps.read.outputs.images }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read
+        id: read
+        run: |
+          echo "build-image=$(./tests/integration/container/build-image.sh)" >> "${GITHUB_OUTPUT}"
+          echo "images=$(jq -c '[.[] | {image, name: (.image | split("@")[0])}]' \
+            tests/integration/container/images.json)" >> "${GITHUB_OUTPUT}"
+
+  # In the SDK image rather than on the runner: Native AOT links against the
+  # build host's glibc, and the image's is the floor.
+  publish:
+    name: publish (${{ matrix.rid }})
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
+    container: ${{ needs.resolve.outputs.build-image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-26.04
+          - rid: linux-arm64
+            runner: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install make
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends make
+
+      - name: Publish
+        env:
+          RID: ${{ matrix.rid }}
+        run: make publish RID="${RID}"
+
+      # A tarball because an uploaded artifact drops the executable bit.
+      - name: Pack
+        env:
+          RID: ${{ matrix.rid }}
+        run: |
+          tar --create --file "binaries-${RID}.tar" \
+            artifacts/bin/*/Release/*/"${RID}"/publish/github-token-broker \
+            artifacts/bin/*/Release/*/"${RID}"/publish/github-token
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: binaries-${{ matrix.rid }}
+          path: binaries-${{ matrix.rid }}.tar
+          if-no-files-found: error
+
+  integration-linux:
+    name: integration (${{ matrix.target.name }}, ${{ matrix.arch }})
+    needs: [resolve, publish]
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.target.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.resolve.outputs.images) }}
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare
+        run: ./tests/integration/container/prepare.sh
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binaries-linux-${{ matrix.arch }}
+
+      - name: Unpack
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: tar --extract --file "binaries-linux-${ARCH}.tar"
+
+      # A host run: the job is already inside the distro, and with no SDK here
+      # run.sh keeps the binaries it was given.
+      - name: Integration test
+        run: make integration-test
+
+  # The cases run natively, so this proves the osx-arm64 binaries; 02-multi-user
+  # skips, having no runuser.
+  integration-macos:
+    name: integration (macos, arm64)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-dotnet
+      - name: Install bash
+        run: brew install bash
+      - name: Integration test
+        run: make integration-test
