@@ -11,6 +11,13 @@
 # Makefile syntax: NAME=value, unquoted. The command line outranks it.
 -include .env
 
+# The scripts are written for bash 5, and macOS ships 3.2 as /bin/bash. Checked
+# here because reading this file already runs one.
+BASH_MAJOR := $(shell bash -c 'echo $${BASH_VERSINFO[0]}' 2>/dev/null)
+ifeq ($(filter-out 0 1 2 3 4,$(BASH_MAJOR)),)
+$(error The scripts need bash 5 or newer, and the bash on PATH is version $(or $(BASH_MAJOR),unknown). On macOS, run "brew install bash")
+endif
+
 .PHONY: help restore build clean test publish integration-test man man-build \
 	lint lint-tools lint-fix lint-dotnet lint-dotnet-fix lint-shfmt lint-shfmt-fix \
 	lint-shellcheck lint-actions lint-markdown lint-spelling lint-docker lint-control-characters \
