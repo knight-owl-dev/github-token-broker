@@ -6,7 +6,7 @@
 
 services:
   lint:
-    image: ghcr.io/knight-owl-dev/ci-tools:latest@sha256:3be3c8cf78282e66d749599984727f168e3bdee77e3df2311f863af519ab8247
+    image: ghcr.io/knight-owl-dev/ci-tools:v1.6.1@sha256:822d75b014b3de9859297439df2d31b3a761a293db5d0b1874cd18c77f03068f
     user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
     working_dir: /workspace
     read_only: true
