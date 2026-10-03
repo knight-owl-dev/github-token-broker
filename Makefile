@@ -23,6 +23,10 @@ SHELL_SCRIPTS := $(shell find scripts tests \( -name '*.sh' -o -name '*.bats' \)
 
 DOCKERFILES := $(shell find tests -name 'Dockerfile*' -not -name '*.dockerignore' 2>/dev/null)
 
+# actionlint reads workflows only; the pin check reads composite actions too.
+WORKFLOWS := $(wildcard .github/workflows/*.yml)
+ACTIONS := $(wildcard .github/actions/*/action.yml)
+
 # Linted as sources. Rendered and packaged from artifacts/man, where man-build
 # replaces their @VERSION@ placeholder.
 MAN_PAGES := $(shell find docs/man -type f -name '*.[0-9]' 2>/dev/null)
@@ -55,8 +59,9 @@ endif
 
 LINT_COMPOSE = docker compose -p github-token-broker-lint --file scripts/lint/docker-compose.yaml
 
-# Run images live in tests/integration/images.json, which the CI matrix reads
-# directly. ENV=container runs the glibc floor alone; ALL=1 runs every image.
+# Run images live in tests/integration/container/images.json, which the CI
+# matrix reads directly. ENV=container runs the glibc floor alone; ALL=1 runs
+# every image.
 # Narrow the cases with CASES="01-socket-mode".
 ALL ?=
 CASES ?=
@@ -149,10 +154,8 @@ lint-shellcheck: ## Run shellcheck on shell scripts
 
 lint-actions: ## Validate workflows, and that SHA pins match their tags
 	@echo "Checking GitHub Actions workflows (actionlint, validate-action-pins)..."
-	@if ls .github/workflows/*.yml >/dev/null 2>&1; then \
-		actionlint .github/workflows/*.yml \
-		&& validate-action-pins .github/workflows/*.yml; \
-	else echo "  no workflows yet"; fi
+	@actionlint $(WORKFLOWS)
+	@validate-action-pins $(WORKFLOWS) $(ACTIONS)
 	@echo "OK"
 
 lint-markdown: ## Check Markdown file formatting
