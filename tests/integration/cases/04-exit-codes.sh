@@ -238,8 +238,8 @@ broker_stop
 
 # --- 78, a listener that cannot bind ------------------------------------------
 #
-# The occupied path is refused rather than cleared: an orphan from an unclean
-# shutdown reads the same as a mistyped path naming something real.
+# A broker already serving the path answers the probe, so a second refuses. What
+# else occupies a path, and when a left socket is reclaimed, is 01-socket-mode.
 
 BUSY_CONFIG="${WORK}/busy-config.json"
 BUSY_SOCKET="${WORK}/run/busy.sock"
