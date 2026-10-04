@@ -524,6 +524,5 @@ into the client.
 ## Not yet done
 
 - Homebrew and apt packaging, and a released artifact to install from.
-- Service definitions for `launchd` and `systemd`, including socket ownership
-  and mode.
+- A `launchd` service definition, which the Homebrew formula carries.
 - Hosts other than `github.com`.

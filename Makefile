@@ -25,8 +25,8 @@ endif
 
 .DEFAULT_GOAL := help
 
-# Shell scripts to lint (all .sh and .bats files in scripts/ and tests/)
-SHELL_SCRIPTS := $(shell find scripts tests \( -name '*.sh' -o -name '*.bats' \) -type f 2>/dev/null)
+# Shell scripts to lint (all .sh and .bats files in scripts/, tests/, and packaging/)
+SHELL_SCRIPTS := $(shell find scripts tests packaging \( -name '*.sh' -o -name '*.bats' \) -type f 2>/dev/null)
 
 DOCKERFILES := $(shell find tests -name 'Dockerfile*' -not -name '*.dockerignore' 2>/dev/null)
 

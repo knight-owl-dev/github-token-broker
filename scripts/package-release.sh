@@ -45,7 +45,8 @@ MAN_PAGES=(
   artifacts/man/man8/github-token-broker.8
 )
 
-for input in "${SERVICE}" "${CLIENT}" "${MAN_PAGES[@]}" LICENSE; do
+for input in "${SERVICE}" "${CLIENT}" "${MAN_PAGES[@]}" LICENSE \
+  packaging/config.example.json; do
   if [[ ! -f "${input}" ]]; then
     echo "ERROR: missing ${input}" >&2
     echo "  Run make publish RID=${RID} and make man-build first" >&2
@@ -58,9 +59,10 @@ mkdir -p "${OUT_DIR}"
 ARCHIVE="${OUT_DIR}/${PACKAGE}_${VERSION}_${RID}.tar.gz"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "${STAGE}"' EXIT
-cp "${SERVICE}" "${CLIENT}" "${MAN_PAGES[@]}" LICENSE "${STAGE}/"
+cp "${SERVICE}" "${CLIENT}" "${MAN_PAGES[@]}" LICENSE packaging/config.example.json \
+  "${STAGE}/"
 tar -C "${STAGE}" -czf "${ARCHIVE}" github-token-broker github-token \
-  "${MAN_PAGES[@]##*/}" LICENSE
+  "${MAN_PAGES[@]##*/}" LICENSE config.example.json
 echo "Packaged ${ARCHIVE}"
 
 if [[ "${RID}" != linux-* ]]; then
