@@ -31,7 +31,8 @@ if ! getent passwd github-token-broker > /dev/null; then
 fi
 
 # The configuration is not secret; the key, mode 0400, is the operator's to own.
-install -d -m 0755 /etc/github-token-broker
+# Created only when missing, so an upgrade keeps a mode the operator tightened.
+[ -d /etc/github-token-broker ] || install -d -m 0755 /etc/github-token-broker
 
 # Re-enable a unit the operator had enabled before a remove and reinstall, and
 # record its state for the purge to clean up.

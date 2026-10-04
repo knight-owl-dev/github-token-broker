@@ -24,6 +24,7 @@
     "allowlisted",
     "blittable",
     "buildx",
+    "containerenv",
     "coverlet",
     "deconfigure",
     "distros",

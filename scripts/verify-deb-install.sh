@@ -29,6 +29,14 @@ if [[ ! -f "${DEB}" ]]; then
   exit 1
 fi
 
+# It purges the package and deletes its configuration and account, so a host
+# with a real install must never run it.
+if [[ ! -f /.dockerenv && ! -f /run/.containerenv ]]; then
+  echo "ERROR: this installs, purges, and deletes the broker's configuration and account" >&2
+  echo "  Run it only in a throwaway container: make test-package ENV=container" >&2
+  exit 1
+fi
+
 # Container images are minimized to drop man pages on install. Removing the
 # rule makes this a host as an operator has one, where the pages land.
 rm -f /etc/dpkg/dpkg.cfg.d/excludes
