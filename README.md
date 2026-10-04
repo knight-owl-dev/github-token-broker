@@ -181,21 +181,11 @@ same control — see [Transports](#transports).
 
 ### Reaching it from a container
 
-Bind-mount the socket. One socket serves any number of containers at once, and
-no shared secret is involved:
-
-```sh
-docker run \
-  -v /run/github-token-broker/broker.sock:/broker.sock \
-  -e GITHUB_TOKEN_BROKER_ENDPOINT=unix:///broker.sock \
-  my-bot-image
-```
-
-The container's process needs write permission on the socket. On Linux the
-mount keeps the host's owner, group, and mode, so a container running as another
-user needs `--user` matching the owner or `--group-add` against a `0660` socket.
-Docker Desktop re-owns the socket to `root` inside the container, so a root
-container connects with no further arrangement.
+Containers reach it through a bind mount, with no shared secret; one socket
+serves any number of them. What to mount depends on the runtime: the socket's
+directory, read-only, on native Linux, and the socket itself on Docker Desktop.
+Either keeps a container reaching a broker that restarts. `github-token(1)` has
+the commands and the permissions each needs.
 
 There is no network transport. A caller that cannot see the host filesystem has
 no route to the service.
@@ -344,14 +334,14 @@ when absent, and refuses to start when it already exists and is writable by
 anyone but its owner — unless the sticky bit is set, which is what makes a
 shared directory like `/tmp` safe.
 
-Binding fails if the socket path is occupied, and nothing is removed to free it:
-a socket left by an unclean shutdown reads the same as a mistyped path naming a
-real file. Clearing it belongs to the operator or the service manager — systemd's
-`RuntimeDirectory=` recreates the directory empty on every start.
+A socket an unclean shutdown left is removed and bound again; anything else at
+the path is refused and left in place, so a mistyped path never deletes what it
+names. See `github-token-broker(8)`.
 
 ```console
 $ github-token-broker --config /etc/github-token-broker/config.json
-configuration error: another process is already listening on /run/github-token-broker/broker.sock
+configuration error: The socket path "/run/github-token-broker/broker.sock" holds
+a file that is not a socket.
 ```
 
 ## Token minting

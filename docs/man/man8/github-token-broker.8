@@ -55,7 +55,7 @@ It holds the App private key, and a container's image and memory are readable
 by anyone who can run the runtime, which puts the key within reach of every
 workload on that daemon.
 .Pp
-Clients in containers reach it by bind-mounting the socket; see
+Clients in containers reach it through a bind mount; see
 .Xr github-token 1 .
 .Pp
 Run it as a dedicated account that does nothing else.
@@ -75,7 +75,9 @@ The unit's
 .Ql RuntimeDirectory=
 owns the socket directory, mode
 .Ql 0750 ,
-so a socket mode of
+and keeps it until reboot, so a container that mounts it follows a restarted
+broker.
+A socket mode of
 .Ql 0660
 lets the account's group mint.
 Add each client's account to that group:
@@ -232,19 +234,28 @@ Connecting needs write permission on the socket file, so a umask would decide
 who may mint.
 .\"
 .Ss \&An occupied path
-Binding fails if the socket path is occupied, and nothing is removed to free it.
-A socket left by an unclean shutdown reads the same as a mistyped path naming a
-real file, and removing the wrong one destroys whatever it named.
+The broker frees its socket path before binding:
+.Bl -bullet
+.It
+A socket that refuses a connection is removed and bound again,
+and the log says so.
+This is how a killed broker comes back.
+.It
+Anything else is refused and left in place:
+a socket that accepts or denies the connection, a regular file, a directory,
+or a symbolic link, which is not followed.
+.El
 .Bd -literal -offset indent
 $ github-token-broker --config /etc/github-token-broker/config.json
 configuration error: Another process is already listening on
 "/run/github-token-broker/broker.sock".
 .Ed
 .Pp
-A path that is a directory or a symbolic link is refused outright.
-Clearing an orphan belongs to the operator or the service manager; systemd's
-.Ql RuntimeDirectory=
-recreates the directory empty on every start.
+Two brokers starting together on the same path can both find the socket dead.
+The later removes the live socket and binds its own,
+leaving the earlier instance running unreachable.
+A service manager starts a single instance, so only a broker run by hand
+alongside it is exposed.
 .\" -------------------------------------------------------------------------
 .Sh TOKEN MINTING
 An RS256 JWT is signed with
