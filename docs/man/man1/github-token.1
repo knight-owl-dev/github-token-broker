@@ -293,7 +293,7 @@ socket every other client connects to; connecting to a socket needs no write
 access to the mount.
 .Bd -literal -offset indent
 $ docker run \e
-    -v /run/github-token-broker:/run/github-token-broker:ro \e
+    --mount type=bind,src=/run/github-token-broker,dst=/run/github-token-broker,readonly \e
     -e GITHUB_TOKEN_BROKER_ENDPOINT=unix:///run/github-token-broker/broker.sock \e
     my-bot-image
 .Ed
@@ -313,7 +313,7 @@ mounted socket by path, so a restarted broker is reached with no change to the
 container:
 .Bd -literal -offset indent
 $ docker run \e
-    -v /path/to/broker.sock:/broker.sock \e
+    --mount type=bind,src=/path/to/broker.sock,dst=/broker.sock \e
     -e GITHUB_TOKEN_BROKER_ENDPOINT=unix:///broker.sock \e
     my-bot-image
 .Ed
@@ -323,6 +323,13 @@ The file sharing layer re-owns the socket to
 inside the container, so a container running as root connects with no further
 arrangement.
 .El
+.Pp
+.Fl -mount
+refuses a source that does not exist yet, so a container started before the
+broker fails and its restart policy retries it.
+.Fl v
+would instead create the missing path as an empty directory on the host, where
+the broker binds.
 .Pp
 There is no network transport, so a caller that cannot see the host filesystem
 has no route to the broker.
