@@ -101,9 +101,10 @@ including
 which also ends a broker that fails while serving.
 After
 .Sy 5 starts within a minute ,
-systemd leaves it down until an operator runs
+systemd leaves it down, refusing even a manual start, until an operator clears
+the count with
 .Ql systemctl reset-failed github-token-broker
-or starts it.
+and starts it again.
 .\" -------------------------------------------------------------------------
 .Sh LOGGING
 Two streams, split by whether the broker went on to serve.
