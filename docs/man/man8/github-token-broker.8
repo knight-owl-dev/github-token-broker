@@ -212,11 +212,13 @@ safe: everyone may create, only the owner may unlink.
 Traversal for a group stays available through
 .Ql 0750 .
 .Pp
-Only the mode is checked, never the owner.
-A directory another account owns at
-.Ql 0755
-passes, and that account can unlink the socket and bind its own in its place.
-Give the socket a directory the broker's own account owns; under systemd that is
+The broker also refuses a directory, or a link naming it, that belongs to any
+account but its own or root,
+since the owner can unlink the socket whatever the mode.
+Only the directory and the link the path names are checked:
+an account that can write any directory above, or owns a link further along,
+can still put its own directory in its place.
+Keep the socket on a path only the broker and root control, such as the unit's
 .Ql RuntimeDirectory= .
 .\"
 .Ss The socket mode

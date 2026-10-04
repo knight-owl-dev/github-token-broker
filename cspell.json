@@ -30,6 +30,7 @@
     "distros",
     "dotnet",
     "errno",
+    "geteuid",
     "healthz",
     "libc",
     "mandoc",

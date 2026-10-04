@@ -120,4 +120,55 @@ fi
 
 broker_stop
 
+# --- a socket directory another account owns -------------------------------
+#
+# Its owner can unlink the socket whatever the mode, which 0750 leaves narrow
+# enough to pass. Without the check the bind fails too, on a directory the
+# broker cannot write, so the message is what proves the refusal.
+
+SCENARIO_ROOT="${WORK}/foreign-owner"
+SCENARIO_SOCKET_DIR="${SCENARIO_ROOT}/run"
+SCENARIO_SOCKET="${SCENARIO_SOCKET_DIR}/broker.sock"
+SCENARIO_CONFIG="${SCENARIO_ROOT}/config.json"
+
+mkdir -p "${SCENARIO_SOCKET_DIR}"
+fixture_key "${SCENARIO_ROOT}/app.pem"
+fixture_config "${SCENARIO_CONFIG}" "${SCENARIO_ROOT}/app.pem" --socket "${SCENARIO_SOCKET}"
+chown -R broker:brokers "${SCENARIO_ROOT}"
+chown outsider:brokers "${SCENARIO_SOCKET_DIR}"
+chmod 0755 "${SCENARIO_ROOT}"
+chmod 0750 "${SCENARIO_SOCKET_DIR}"
+
+run_capture runuser -u broker -g brokers -- github-token-broker --config "${SCENARIO_CONFIG}"
+assert_eq "a socket directory another account owns refuses startup" 73 "${RUN_STATUS}"
+assert_contains "and says whose it is" "${RUN_STDERR}" "belongs to another account"
+if [[ -e "${SCENARIO_SOCKET}" ]]; then
+  fail "and binds nothing" "a socket appeared at ${SCENARIO_SOCKET}"
+else
+  pass "and binds nothing"
+fi
+
+# --- a link to the socket directory another account owns ----------------------
+#
+# The directory behind it is the broker's, so only the link's own owner refuses
+# it. Without that check the broker serves, which run_capture's timeout ends.
+
+SCENARIO_ROOT="${WORK}/foreign-link"
+SCENARIO_SOCKET_DIR="${SCENARIO_ROOT}/run"
+SCENARIO_LINK="${SCENARIO_ROOT}/linked"
+SCENARIO_CONFIG="${SCENARIO_ROOT}/config.json"
+
+mkdir -p "${SCENARIO_SOCKET_DIR}"
+ln -s "${SCENARIO_SOCKET_DIR}" "${SCENARIO_LINK}"
+fixture_key "${SCENARIO_ROOT}/app.pem"
+fixture_config "${SCENARIO_CONFIG}" "${SCENARIO_ROOT}/app.pem" --socket "${SCENARIO_LINK}/broker.sock"
+chown -R broker:brokers "${SCENARIO_ROOT}"
+chown -h outsider "${SCENARIO_LINK}"
+chmod 0755 "${SCENARIO_ROOT}"
+chmod 0750 "${SCENARIO_SOCKET_DIR}"
+
+run_capture runuser -u broker -g brokers -- github-token-broker --config "${SCENARIO_CONFIG}"
+assert_eq "a link to the socket directory another account owns refuses startup" 73 "${RUN_STATUS}"
+assert_contains "and says whose it is" "${RUN_STDERR}" "belongs to another account"
+
 case_summary
