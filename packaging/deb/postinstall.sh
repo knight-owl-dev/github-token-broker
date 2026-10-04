@@ -18,10 +18,16 @@ case "$1" in
   *) exit 0 ;;
 esac
 
-# Nothing logs in as the account, and it owns no home.
+# Nothing logs in as the account, and it owns no home. An operator may have
+# made the group first, to add clients to it, so an existing one is joined.
 if ! getent passwd github-token-broker > /dev/null; then
-  useradd --system --user-group --no-create-home --home-dir /nonexistent \
-    --shell /usr/sbin/nologin github-token-broker
+  if getent group github-token-broker > /dev/null; then
+    useradd --system --gid github-token-broker --no-create-home \
+      --home-dir /nonexistent --shell /usr/sbin/nologin github-token-broker
+  else
+    useradd --system --user-group --no-create-home \
+      --home-dir /nonexistent --shell /usr/sbin/nologin github-token-broker
+  fi
 fi
 
 # The configuration is not secret; the key, mode 0400, is the operator's to own.

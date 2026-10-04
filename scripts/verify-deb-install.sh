@@ -114,9 +114,12 @@ unit_is_enabled() {
 systemctl enable github-token-broker.service > /dev/null 2>&1
 check "an offline enable links the unit" unit_is_enabled
 
+# Each holds while the link is there to lose: a disable anywhere in the remove
+# or install path would take it.
 apt-get remove -y -qq github-token-broker > /dev/null
+check "a remove keeps the unit's enablement" unit_is_enabled
 apt-get install -y -qq "${DEB}" > /dev/null
-check "a remove and reinstall keeps the unit enabled" unit_is_enabled
+check "a reinstall leaves the unit enabled" unit_is_enabled
 
 apt-get purge -y -qq github-token-broker > /dev/null
 check "a purge removes the binaries" test ! -e /usr/bin/github-token-broker
@@ -129,3 +132,16 @@ apt-get install -y -qq "${DEB}" > /dev/null
 rm -rf /etc/github-token-broker
 check "a purge succeeds with the configuration directory already gone" \
   apt-get purge -y -qq github-token-broker
+
+account_in_its_group() {
+  local group
+  group="$(id -gn github-token-broker)" || return 1
+  [[ "${group}" == github-token-broker ]]
+}
+
+# An operator may make the group first, to add clients to it before installing.
+userdel github-token-broker
+getent group github-token-broker > /dev/null || groupadd --system github-token-broker
+apt-get install -y -qq "${DEB}" > /dev/null
+check "an install joins a group that already exists" account_in_its_group
+apt-get purge -y -qq github-token-broker > /dev/null
