@@ -15,11 +15,12 @@ ExecStart=/usr/bin/github-token-broker --config /etc/github-token-broker/config.
 User=github-token-broker
 Group=github-token-broker
 
-# Owns the socket directory, removes it on stop, and recreates it empty, which
-# also clears a socket an unclean stop left behind. 0750 lets the group reach
-# a 0660 socket.
+# Owns the socket directory, and keeps it until reboot so a container mounting
+# it follows a restarted broker; the broker reclaims a socket an unclean stop
+# left. 0750 lets the group reach a 0660 socket.
 RuntimeDirectory=github-token-broker
 RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
 
 # A command line, key, socket mode, or configuration the broker refused fails
 # again until an operator acts. 70 restarts: the broker exits with it both on
