@@ -25,19 +25,25 @@ identity, the key path, or what else is allowlisted.
 
 That separates duties. It is **not** an isolation boundary: anything that can
 reach the service endpoint can obtain a token for any allowlisted repository.
-Restricting who can reach it is the deployment's job, and depends on the
-transport.
+Restricting who can reach it is the deployment's job: the socket's mode and
+its directory.
 
 ## Install
 
 Artifacts are self-contained, so no .NET runtime is required on the host.
 
+There is no release yet, so build from source; [Build and test](#build-and-test)
+lists what that needs:
+
 ```sh
-# Homebrew and apt packaging are planned; until then, build from source.
 git clone https://github.com/knight-owl-dev/github-token-broker
 cd github-token-broker
-make publish RID=osx-arm64
+make publish
+make package                    # a tarball, and on Linux a .deb
 ```
+
+The `.deb` installs a systemd unit that runs the service as its own account;
+`github-token-broker(8)` covers deployment.
 
 ## Configure
 
@@ -57,7 +63,7 @@ startup, so a misspelled security-sensitive key is refused rather than ignored.
 | `app_id` | required | The App's numeric identity, from its registration. Signed into every JWT as `iss`. |
 | `installation_id` | required | Which installation of that App to mint against, the number in the installation's settings URL. An allowlist entry may name a different one; this is what the rest take. |
 | `private_key_path` | required | Absolute path to the App's PEM private key. Re-read on every mint, so replacing the file rotates the key with no restart. |
-| `listen` | required | Where requests are accepted. See the three shapes below. |
+| `listen` | required | Where requests are accepted; see [Listening on a Unix socket](#listening-on-a-unix-socket). |
 | `repositories` | required | The allowlist, and the permission ceiling for each entry. |
 | `github_host` | `github.com` | The only accepted value today; the setting exists so a second host is a configuration change rather than a code change. |
 | `api_url` | `https://api.github.com` | Where the GitHub API lives. It exists to point the service at a fake in a test, so plaintext is accepted against loopback and nowhere else. Not GitHub Enterprise support. |
@@ -146,8 +152,7 @@ next mint rather than the next restart — see [Cache](#cache).
 
 ### Listening on a Unix socket
 
-The recommended shape, and the one to reach for unless a caller cannot see the
-host filesystem. Authorization is filesystem access, so there is no shared
+The only transport. Authorization is filesystem access, so there is no shared
 secret to distribute, rotate, or leak.
 
 ```json
@@ -315,16 +320,8 @@ Requests are bounded: `application/json` only, at most 4096 bytes, JSON depth
 
 ## Transports
 
-One client abstraction covers both endpoint forms, so behavior above the
-endpoint does not depend on which is selected:
-
-```text
-unix:///absolute/path/to/broker.sock
-http://host:port
-```
-
-Which of them to configure, and what each costs, is under
-[Configure](#configure).
+The client reaches the service at a `unix:///absolute/path/to/broker.sock`
+endpoint. `http` and `https` are refused, reserved for a network transport.
 
 The mode is applied by the broker rather than left to the process umask, since
 connecting needs write permission on the socket file and a umask would decide
@@ -479,8 +476,8 @@ They also run in parallel. xUnit v3 runs on Microsoft.Testing.Platform, so each
 test project is a standalone executable that starts in milliseconds, and test
 classes within an assembly run concurrently. Nothing shares mutable state: temp
 directories, sockets, and ephemeral ports are per test, and the environment is
-injected rather than mutated. Each test project is also a standalone executable
-under `artifacts/bin`, which can be run directly to skip MSBuild entirely.
+injected rather than mutated. A test executable under `artifacts/bin` can be run
+directly to skip MSBuild entirely.
 
 The integration suite runs the published binaries instead of the assemblies, on
 this host or across the Linux images pinned in
@@ -513,6 +510,6 @@ into the client.
 
 ## Not yet done
 
-- Homebrew and apt packaging, and a released artifact to install from.
+- A first release, and its apt and Homebrew distribution.
 - A `launchd` service definition, which the Homebrew formula carries.
 - Hosts other than `github.com`.
