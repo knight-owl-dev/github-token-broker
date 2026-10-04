@@ -35,6 +35,7 @@
     "mandoc",
     "markdownlint",
     "nfpm",
+    "nlink",
     "nuget",
     "pkill",
     "shellcheck",

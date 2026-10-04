@@ -30,6 +30,16 @@ public static class BrokerExitCode
     /// </remarks>
     public const int SocketMode = 71;
 
+    /// <summary>
+    /// The socket directory was unsafe or could not be created, or the socket path
+    /// could not be freed or bound.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Configuration"/> because the configuration was
+    /// valid and the host is what needs fixing.
+    /// </remarks>
+    public const int SocketPath = 73;
+
     /// <summary>Startup failed for a reason the broker does not classify.</summary>
     /// <remarks>
     /// Every other status names something to go and fix; this one only says the
@@ -37,6 +47,6 @@ public static class BrokerExitCode
     /// </remarks>
     public const int Internal = 70;
 
-    /// <summary>Configuration was missing or invalid, including a listener that could not bind.</summary>
+    /// <summary>Configuration was missing or invalid.</summary>
     public const int Configuration = 78;
 }

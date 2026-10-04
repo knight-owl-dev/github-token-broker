@@ -4,16 +4,12 @@ using KnightOwl.GitHubTokenBroker.Infrastructure.Configuration;
 
 namespace KnightOwl.GitHubTokenBroker.Service.Infrastructure.Transport;
 
-/// <summary>
-/// Confirms a Unix socket path is free to bind. Removes nothing.
-/// </summary>
+/// <summary>Frees a Unix socket path for the broker to bind.</summary>
 /// <remarks>
-/// Clearing an orphaned socket would mean proving the path holds one, and a
-/// refused connection does not: Linux answers
-/// <see cref="SocketError.ConnectionRefused"/> for an ordinary file as readily as
-/// for a socket nobody is listening on, so a mistyped path would cost whatever it
-/// names. A connection that succeeds is conclusive, so a broker already running
-/// is named as such; anything else is reported for the operator to clear.
+/// A refused connection cannot prove a path holds a dead socket: Linux answers
+/// <see cref="SocketError.ConnectionRefused"/> for an ordinary file as readily as for a socket nobody is
+/// listening on. So the file's type is read first, and only a socket that refuses a connection is removed;
+/// anything else is refused, so a mistyped path never deletes what it names.
 /// </remarks>
 public static class UnixSocketPreparation
 {
@@ -24,12 +20,14 @@ public static class UnixSocketPreparation
     private const UnixFileMode DirectoryMode =
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 
-    /// <summary>Confirms the path is free to bind, or throws explaining what holds it.</summary>
+    /// <summary>Frees the path to bind, or throws explaining what holds it.</summary>
     /// <param name="socketPath">Absolute path the broker intends to bind.</param>
-    /// <exception cref="ConfigurationException">
-    /// The directory could not be made safe, or something already occupies the path.
+    /// <returns>Whether the path was free, or held a dead socket that was removed.</returns>
+    /// <exception cref="ConfigurationException">The socket path names no directory.</exception>
+    /// <exception cref="UnixSocketPathException">
+    /// The directory could not be made safe, or something other than a dead socket occupies the path.
     /// </exception>
-    public static void Prepare(string socketPath)
+    public static UnixSocketPathState Prepare(string socketPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(socketPath);
 
@@ -41,29 +39,57 @@ public static class UnixSocketPreparation
 
         PrepareDirectory(parent);
 
-        if (Directory.Exists(socketPath))
+        return ClearPath(socketPath);
+    }
+
+    /// <summary>
+    /// Frees the path, removing a dead socket, or throws explaining what holds it.
+    /// </summary>
+    /// <param name="socketPath">The path to free.</param>
+    /// <returns>Whether the path was free, or held a dead socket that was removed.</returns>
+    private static UnixSocketPathState ClearPath(string socketPath)
+    {
+        if (!Path.Exists(socketPath))
         {
-            throw new ConfigurationException($"The socket path \"{socketPath}\" is a directory.");
+            return UnixSocketPathState.Free;
         }
 
-        if (!File.Exists(socketPath))
+        return UnixFileType.Of(socketPath) switch
         {
-            return;
-        }
+            UnixFileKind.Missing => UnixSocketPathState.Free,
 
-        // Checked before connecting: a link's target is a separate file that must not
-        // be reached through this path at all.
-        if (File.ResolveLinkTarget(socketPath, returnFinalTarget: false) is not null)
+            UnixFileKind.SymbolicLink
+                => throw new UnixSocketPathException($"The socket path \"{socketPath}\" is a symbolic link, which the broker does not follow."),
+
+            UnixFileKind.Socket => RemoveIfDead(socketPath),
+
+            UnixFileKind.Other when Directory.Exists(socketPath)
+                => throw new UnixSocketPathException($"The socket path \"{socketPath}\" is a directory."),
+
+            UnixFileKind.Other
+                => throw new UnixSocketPathException($"The socket path \"{socketPath}\" holds a file that is not a socket."),
+
+            UnixFileKind.Unknown
+                => throw new UnixSocketPathException($"The type of the file at \"{socketPath}\" could not be read."),
+        };
+    }
+
+    /// <summary>Removes a socket nothing answers on.</summary>
+    /// <param name="socketPath">The dead socket.</param>
+    private static void RemoveDeadSocket(string socketPath)
+    {
+        try
         {
-            throw new ConfigurationException($"The socket path \"{socketPath}\" is a symbolic link.");
+            File.Delete(socketPath);
         }
-
-        if (IsListening(socketPath))
+        catch (Exception exception)
+            when (exception is IOException or UnauthorizedAccessException)
         {
-            throw new ConfigurationException($"Another process is already listening on \"{socketPath}\".");
+            throw new UnixSocketPathException(
+                $"The dead socket at \"{socketPath}\" could not be removed.",
+                exception
+            );
         }
-
-        throw new ConfigurationException($"The socket path \"{socketPath}\" is occupied. Remove it once nothing is using it.");
     }
 
     /// <summary>
@@ -89,7 +115,7 @@ public static class UnixSocketPreparation
             catch (Exception exception)
                 when (exception is IOException or UnauthorizedAccessException)
             {
-                throw new ConfigurationException(
+                throw new UnixSocketPathException(
                     $"The socket directory \"{parent}\" could not be created.",
                     exception
                 );
@@ -107,9 +133,8 @@ public static class UnixSocketPreparation
         // in its place, so it is refused even when the socket's own mode is narrow.
         // Traversal for a group stays available through 0750.
         //
-        // The owner is not checked: .NET exposes none, and a stat whose struct
-        // layout differs by platform and libc version is worse than the gap it
-        // closes. What that leaves open is in github-token-broker(8).
+        // The owner is not checked: .NET exposes none, and UnixFileType reads only the type.
+        // What that leaves open is in github-token-broker(8).
         var mode = new DirectoryInfo(parent).UnixFileMode;
         var writableByOthers =
             mode.HasFlag(UnixFileMode.GroupWrite) || mode.HasFlag(UnixFileMode.OtherWrite);
@@ -118,7 +143,7 @@ public static class UnixSocketPreparation
         // /tmp safe: everyone may create, only the owner may unlink.
         if (writableByOthers && !mode.HasFlag(UnixFileMode.StickyBit))
         {
-            throw new ConfigurationException($"The socket directory \"{parent}\" is writable beyond its owner and is not sticky (mode {Format(mode)}).");
+            throw new UnixSocketPathException($"The socket directory \"{parent}\" is writable beyond its owner and is not sticky (mode {Format(mode)}).");
         }
     }
 
@@ -128,21 +153,39 @@ public static class UnixSocketPreparation
     internal static string Format(UnixFileMode mode)
         => Convert.ToString((int) mode, 8).PadLeft(4, '0');
 
-    /// <summary>Reports whether a process is accepting connections on the path.</summary>
-    /// <param name="socketPath">The occupied path.</param>
-    /// <returns><see langword="true"/> when the connection succeeded.</returns>
-    private static bool IsListening(string socketPath)
+    /// <summary>
+    /// Removes a socket that refuses a connection, or throws explaining why it stays.
+    /// </summary>
+    /// <param name="socketPath">The socket at the path.</param>
+    /// <returns>Free when the socket vanished before the probe, reclaimed once removed.</returns>
+    private static UnixSocketPathState RemoveIfDead(string socketPath)
     {
         using Socket probe = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
 
         try
         {
             probe.Connect(new UnixDomainSocketEndPoint(socketPath));
-            return true;
         }
-        catch (SocketException)
+        catch (SocketException) when (UnixFileType.Of(socketPath) == UnixFileKind.Missing)
         {
-            return false;
+            // Unlinked since its type was read, by a broker stopping cleanly.
+            return UnixSocketPathState.Free;
         }
+        catch (SocketException exception)
+            when (exception.SocketErrorCode == SocketError.ConnectionRefused)
+        {
+            RemoveDeadSocket(socketPath);
+            return UnixSocketPathState.Reclaimed;
+        }
+        catch (SocketException exception)
+        {
+            // Denied or busy, which a live socket answers too.
+            throw new UnixSocketPathException(
+                $"The socket at \"{socketPath}\" could not be probed, so it is left in place.",
+                exception
+            );
+        }
+
+        throw new UnixSocketPathException($"Another process is already listening on \"{socketPath}\".");
     }
 }

@@ -20,25 +20,34 @@ public sealed class UnixSocketPreparationTests : IDisposable
     private string Path(string name)
         => System.IO.Path.Combine(_root, name);
 
+    /// <summary>
+    /// A socket file nothing listens on, as a broker killed mid-serve leaves.
+    /// </summary>
+    /// <param name="socketPath">Where to bind it.</param>
+    /// <returns>
+    /// The bound socket, kept open because disposing it removes the file.
+    /// </returns>
+    private static Socket BindWithoutListening(string socketPath)
+    {
+        Socket bound = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        bound.Bind(new UnixDomainSocketEndPoint(socketPath));
+        return bound;
+    }
+
     [Fact]
     public void AcceptsAPathThatDoesNotExist()
-        => UnixSocketPreparation.Prepare(Path("absent.sock"));
+    {
+        Assert.Equal(UnixSocketPathState.Free, UnixSocketPreparation.Prepare(Path("absent.sock")));
+    }
 
     [Fact]
-    public void RefusesASocketWithNoListenerRatherThanRemovingIt()
+    public void ReclaimsADeadSocket()
     {
-        var socketPath = Path("orphan.sock");
+        var socketPath = Path("left.sock");
+        using var left = BindWithoutListening(socketPath);
 
-        // Bound but never listening, so the kernel refuses connections to it. That is
-        // the same answer a socket orphaned by an unclean shutdown gives — and the
-        // same answer Linux gives for an ordinary file, which is why neither is removed.
-        using Socket bound = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        bound.Bind(new UnixDomainSocketEndPoint(socketPath));
-
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(socketPath));
-
-        Assert.Contains("is occupied", failure.Message, StringComparison.Ordinal);
-        Assert.True(File.Exists(socketPath));
+        Assert.Equal(UnixSocketPathState.Reclaimed, UnixSocketPreparation.Prepare(socketPath));
+        Assert.False(File.Exists(socketPath));
     }
 
     [Fact]
@@ -49,9 +58,30 @@ public sealed class UnixSocketPreparationTests : IDisposable
         listener.Bind(new UnixDomainSocketEndPoint(socketPath));
         listener.Listen(1);
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(socketPath));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(socketPath));
 
         Assert.Contains("already listening", failure.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(socketPath));
+    }
+
+    /// <remarks>
+    /// A live socket the broker may not connect to answers with a denial rather
+    /// than a refusal, and must not be taken for dead.
+    /// </remarks>
+    [Fact]
+    public void RefusesASocketItMayNotProbe()
+    {
+        Assert.SkipWhen(Environment.IsPrivilegedProcess, "Root connects regardless of the socket's mode.");
+
+        var socketPath = Path("denied.sock");
+        using Socket listener = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+        listener.Listen(1);
+        File.SetUnixFileMode(socketPath, UnixFileMode.None);
+
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(socketPath));
+
+        Assert.Contains("could not be probed", failure.Message, StringComparison.Ordinal);
         Assert.True(File.Exists(socketPath));
     }
 
@@ -61,8 +91,21 @@ public sealed class UnixSocketPreparationTests : IDisposable
         var directoryPath = Path("a-directory");
         Directory.CreateDirectory(directoryPath);
 
-        Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(directoryPath));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(directoryPath));
+
+        Assert.Contains("is a directory", failure.Message, StringComparison.Ordinal);
         Assert.True(Directory.Exists(directoryPath));
+    }
+
+    [Fact]
+    public void RefusesALinkToADirectoryAsALink()
+    {
+        var link = Path("directory-link.sock");
+        File.CreateSymbolicLink(link, Directory.CreateDirectory(Path("target-directory")).FullName);
+
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(link));
+
+        Assert.Contains("symbolic link", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -73,7 +116,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         File.WriteAllText(target, "important");
         File.CreateSymbolicLink(link, target);
 
-        Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(link));
+        Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(link));
 
         // Neither the link nor what it points at may be removed.
         Assert.True(File.Exists(link));
@@ -93,7 +136,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         var link = Path("dangling.sock");
         File.CreateSymbolicLink(link, Path("absent"));
 
-        var failure = Assert.Throws<ConfigurationException>(
+        var failure = Assert.Throws<UnixSocketPathException>(
             () => UnixSocketPreparation.Prepare(link)
         );
 
@@ -106,16 +149,16 @@ public sealed class UnixSocketPreparationTests : IDisposable
     /// socket, since a socket inode also reports zero bytes.
     /// </remarks>
     [Theory]
-    [InlineData("not a socket")]
+    [InlineData("important")]
     [InlineData("")]
     public void RefusesARegularFile(string contents)
     {
         var filePath = Path("data.sock");
         File.WriteAllText(filePath, contents);
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(filePath));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(filePath));
 
-        Assert.Contains("is occupied", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("not a socket", failure.Message, StringComparison.Ordinal);
         Assert.True(File.Exists(filePath));
         Assert.Equal(contents, File.ReadAllText(filePath));
     }
@@ -125,7 +168,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
     {
         var directory = Path("no-such-directory");
 
-        UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock"));
+        Assert.Equal(UnixSocketPathState.Free, UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
 
         Assert.True(Directory.Exists(directory));
         Assert.Equal(
@@ -148,7 +191,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
             | UnixFileMode.OtherExecute
         );
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
 
         Assert.Contains("writable beyond its owner", failure.Message, StringComparison.Ordinal);
     }
@@ -174,7 +217,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
             | UnixFileMode.StickyBit
         );
 
-        UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock"));
+        Assert.Equal(UnixSocketPathState.Free, UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
     }
 
     [Fact]
@@ -191,8 +234,12 @@ public sealed class UnixSocketPreparationTests : IDisposable
             | UnixFileMode.GroupExecute
         );
 
-        UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock"));
+        Assert.Equal(UnixSocketPathState.Free, UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
     }
+
+    [Fact]
+    public void TreatsAPathWithNoDirectoryAsConfiguration()
+        => Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare("broker.sock"));
 
     [Fact]
     public void RejectsAnEmptyPath()

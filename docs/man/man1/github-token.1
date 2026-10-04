@@ -278,18 +278,26 @@ Clone over HTTPS once the helper is configured:
 Open a pull request as the App:
 .Dl $ github-token gh example-owner/example-repo \-\- pr create \-\-fill
 .Pp
-Reach a broker on the host from inside a container by bind-mounting its socket.
-One socket serves any number of containers at once:
+Reach a broker on the host from inside a container through a bind mount.
+One socket serves any number of containers at once.
+What to mount depends on the runtime, and the right choice keeps a container
+reaching a broker that restarts:
+.Bl -tag -width Ds
+.It Linux
+Mount the socket's directory, read-only.
+A mounted socket file stays bound to the socket present when the container
+started, so it stops answering once the broker restarts;
+a mounted directory shows the new socket.
+Read-only keeps a container, which runs as root by default, from replacing the
+socket every other client connects to; connecting to a socket needs no write
+access to the mount.
 .Bd -literal -offset indent
 $ docker run \e
-    -v /run/github-token-broker/broker.sock:/broker.sock \e
-    -e GITHUB_TOKEN_BROKER_ENDPOINT=unix:///broker.sock \e
+    -v /run/github-token-broker:/run/github-token-broker:ro \e
+    -e GITHUB_TOKEN_BROKER_ENDPOINT=unix:///run/github-token-broker/broker.sock \e
     my-bot-image
 .Ed
 .Pp
-The container's process needs write permission on the socket:
-.Bl -tag -width Ds
-.It Linux
 The mount keeps the host's owner, group, and mode.
 A container running as another user needs
 .Fl -user
@@ -299,6 +307,17 @@ against a
 .Ql 0660
 socket.
 .It Docker Desktop
+Mount the socket itself.
+Its file sharing carries no socket inside a mounted directory, but forwards a
+mounted socket by path, so a restarted broker is reached with no change to the
+container:
+.Bd -literal -offset indent
+$ docker run \e
+    -v /path/to/broker.sock:/broker.sock \e
+    -e GITHUB_TOKEN_BROKER_ENDPOINT=unix:///broker.sock \e
+    my-bot-image
+.Ed
+.Pp
 The file sharing layer re-owns the socket to
 .Ql root
 inside the container, so a container running as root connects with no further

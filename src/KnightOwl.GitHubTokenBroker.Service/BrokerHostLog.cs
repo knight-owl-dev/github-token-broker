@@ -32,4 +32,11 @@ internal static partial class BrokerHostLog
     )]
     public static partial void UnixSocketReady(ILogger logger, string socketPath, string socketMode);
 
+    [LoggerMessage(
+        EventId = 3004,
+        Level = LogLevel.Warning,
+        Message = "Removed the dead socket at {SocketPath}, left by a process that stopped uncleanly"
+    )]
+    public static partial void UnixSocketReclaimed(ILogger logger, string socketPath);
+
 }

@@ -18,15 +18,10 @@ internal static class BrokerListeners
     {
         /// <summary>Binds the configured listener.</summary>
         /// <param name="listen">The configured listener.</param>
-        /// <exception cref="ConfigurationException">
-        /// The socket path is not free to bind.
-        /// </exception>
         public void UseBrokerListeners(ListenOptions listen)
         {
             ArgumentNullException.ThrowIfNull(webHost);
             ArgumentNullException.ThrowIfNull(listen);
-
-            UnixSocketPreparation.Prepare(listen.UnixSocket.Path);
 
             webHost.ConfigureKestrel(options =>
                 {

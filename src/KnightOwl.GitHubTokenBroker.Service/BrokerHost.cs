@@ -69,6 +69,33 @@ internal static class BrokerHost
             ArgumentNullException.ThrowIfNull(app);
             ArgumentNullException.ThrowIfNull(listen);
 
+            UnixSocketPathState pathState;
+            try
+            {
+                pathState = UnixSocketPreparation.Prepare(listen.UnixSocket.Path);
+            }
+            catch (UnixSocketPathException exception)
+            {
+                await DiagnosticReport.WriteAsync(Console.Error, "listener error", exception);
+                return BrokerExitCode.SocketPath;
+            }
+            catch (ConfigurationException exception)
+            {
+                await DiagnosticReport.WriteAsync(Console.Error, "configuration error", exception);
+                return BrokerExitCode.Configuration;
+            }
+            catch (Exception exception)
+            {
+                await DiagnosticReport.WriteAsync(Console.Error, "internal error", exception);
+                return BrokerExitCode.Internal;
+            }
+
+            // Before binding, so the removal is on record even when the bind fails.
+            if (pathState is UnixSocketPathState.Reclaimed)
+            {
+                BrokerHostLog.UnixSocketReclaimed(app.Logger, listen.UnixSocket.Path);
+            }
+
             try
             {
                 // Binding creates the socket file, and its mode then comes from the
@@ -83,7 +110,7 @@ internal static class BrokerHost
                 // Kestrel binds when the host starts rather than when it is built,
                 // so a path UnixSocketPreparation could not rule out arrives here.
                 await DiagnosticReport.WriteAsync(Console.Error, "listener error", exception);
-                return BrokerExitCode.Configuration;
+                return BrokerExitCode.SocketPath;
             }
 
             try

@@ -206,7 +206,7 @@ transport arrives beside it.
 .Pp
 Authorization is filesystem access, so there is no shared secret to distribute,
 rotate, or leak, and nothing bound that another host could reach.
-A caller in a container reaches the socket by bind-mounting it; see
+A caller in a container reaches the socket through a bind mount; see
 .Xr github-token 1 .
 .Bd -literal -offset indent
 {

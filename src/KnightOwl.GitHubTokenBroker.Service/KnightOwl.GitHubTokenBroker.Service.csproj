@@ -21,6 +21,12 @@
         <InvariantGlobalization>true</InvariantGlobalization>
     </PropertyGroup>
 
+    <PropertyGroup>
+        <!-- LibraryImport generates its marshalling as unsafe code; UnixFileType
+             is the only caller, reading a file's type from lstat. -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
     <ItemGroup>
         <ProjectReference Include="../KnightOwl.GitHubTokenBroker.Core/KnightOwl.GitHubTokenBroker.Core.csproj"/>
     </ItemGroup>

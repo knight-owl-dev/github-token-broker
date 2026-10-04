@@ -84,7 +84,7 @@ fixture_config "${SCENARIO_CONFIG}" "${SCENARIO_ROOT}/app.pem" --socket "${SCENA
 chmod 0770 "${SCENARIO_SOCKET_DIR}"
 run_capture github-token-broker --config "${SCENARIO_CONFIG}"
 
-assert_eq "a group-writable socket directory refuses startup" 78 "${RUN_STATUS}"
+assert_eq "a group-writable socket directory refuses startup" 73 "${RUN_STATUS}"
 assert_contains "and says why" "${RUN_STDERR}" "writable beyond its owner"
 
 scenario sticky-directory
@@ -99,18 +99,19 @@ else
 fi
 broker_stop
 
-# --- an occupied socket path is refused, never cleared ------------------------
+# --- an occupied socket path is refused unless it holds a dead socket ---------
 #
-# Both shapes are covered because neither can be told from the other; see
-# UnixSocketPreparation.
+# A connection cannot tell a dead socket from an ordinary file, so the file's
+# type decides; see UnixSocketPreparation.
 
 scenario regular-file
 fixture_config "${SCENARIO_CONFIG}" "${SCENARIO_ROOT}/app.pem" --socket "${SCENARIO_SOCKET}"
 echo "important" > "${SCENARIO_SOCKET}"
 run_capture github-token-broker --config "${SCENARIO_CONFIG}"
 
-assert_eq "a regular file at the socket path refuses startup" 78 "${RUN_STATUS}"
-assert_contains "and says the path is occupied" "${RUN_STDERR}" "is occupied"
+assert_eq "a regular file at the socket path refuses startup" 73 "${RUN_STATUS}"
+assert_contains "and says it is not a socket" "${RUN_STDERR}" "not a socket"
+
 if [[ -f "${SCENARIO_SOCKET}" ]]; then
   REGULAR_FILE_CONTENTS="$(cat "${SCENARIO_SOCKET}")"
   assert_eq "and leaves the file untouched" "important" "${REGULAR_FILE_CONTENTS}"
@@ -124,7 +125,7 @@ touch "${SCENARIO_ROOT}/target"
 ln -s "${SCENARIO_ROOT}/target" "${SCENARIO_SOCKET}"
 run_capture github-token-broker --config "${SCENARIO_CONFIG}"
 
-assert_eq "a symbolic link at the socket path refuses startup" 78 "${RUN_STATUS}"
+assert_eq "a symbolic link at the socket path refuses startup" 73 "${RUN_STATUS}"
 assert_contains "and says so" "${RUN_STDERR}" "symbolic link"
 
 scenario live-listener
@@ -133,7 +134,7 @@ broker_start "${SCENARIO_CONFIG}" "${SCENARIO_LOG}"
 
 if broker_wait_socket; then
   run_capture github-token-broker --config "${SCENARIO_CONFIG}"
-  assert_eq "a second broker on a live socket refuses startup" 78 "${RUN_STATUS}"
+  assert_eq "a second broker on a live socket refuses startup" 73 "${RUN_STATUS}"
   assert_contains "and names the listener" "${RUN_STDERR}" "already listening"
 else
   fail_with_log "a second broker on a live socket refuses startup"
@@ -147,23 +148,23 @@ broker_start "${SCENARIO_CONFIG}" "${SCENARIO_LOG}"
 if broker_wait_socket; then
   broker_kill
   if [[ -S "${SCENARIO_SOCKET}" ]]; then
-    run_capture github-token-broker --config "${SCENARIO_CONFIG}"
-    assert_eq "an orphaned socket refuses startup" 78 "${RUN_STATUS}"
-    assert_contains "and asks the operator to remove it" "${RUN_STDERR}" "Remove it"
-
-    rm -f "${SCENARIO_SOCKET}"
     broker_start "${SCENARIO_CONFIG}" "${SCENARIO_LOG}.restart"
     if broker_wait_socket; then
-      pass "and binds once the orphan is gone"
+      pass "a socket a killed broker left is reclaimed"
+      if broker_wait_log "Removed the dead socket at"; then
+        pass "and the log says so"
+      else
+        fail_with_log "and the log says so"
+      fi
     else
-      fail_with_log "and binds once the orphan is gone"
+      fail_with_log "a socket a killed broker left is reclaimed"
     fi
     broker_stop
   else
     fail "an unclean shutdown leaves the socket behind" "nothing at ${SCENARIO_SOCKET}"
   fi
 else
-  fail_with_log "an orphaned socket refuses startup"
+  fail_with_log "a socket a killed broker left is reclaimed"
 fi
 
 case_summary
