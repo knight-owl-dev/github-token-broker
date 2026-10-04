@@ -1,5 +1,6 @@
-# The .deb: both executables and the three man pages. scripts/package-release.sh
-# builds it and supplies ARCH, VERSION, RID, and TFM.
+# The .deb: both executables, the three man pages, and the systemd unit, with the
+# account it runs as. scripts/package-release.sh builds it and supplies ARCH,
+# VERSION, RID, and TFM.
 name: github-token-broker
 arch: "${ARCH}"
 version: "${VERSION}"
@@ -15,6 +16,8 @@ depends:
   - libc6 (>= 2.39)
   - libssl3t64 | libssl3
   - ca-certificates
+  # useradd, for the account postinstall creates.
+  - passwd
 
 contents:
   - src: artifacts/bin/KnightOwl.GitHubTokenBroker.Service/Release/${TFM}/${RID}/publish/github-token-broker
@@ -33,5 +36,16 @@ contents:
     dst: /usr/share/man/man5/github-token-broker-config.5
   - src: artifacts/man/man8/github-token-broker.8
     dst: /usr/share/man/man8/github-token-broker.8
+  - src: packaging/github-token-broker.service
+    dst: /usr/lib/systemd/system/github-token-broker.service
+  # Beside the docs rather than among them: minimized images drop /usr/share/doc,
+  # and the post-install points the operator here.
+  - src: packaging/config.example.json
+    dst: /usr/share/github-token-broker/config.example.json
   - src: LICENSE
     dst: /usr/share/doc/github-token-broker/copyright
+
+scripts:
+  postinstall: packaging/deb/postinstall.sh
+  preremove: packaging/deb/preremove.sh
+  postremove: packaging/deb/postremove.sh

@@ -1,0 +1,50 @@
+# Installed by the .deb, not enabled: the broker cannot start before an operator
+# supplies its key and configuration. See github-token-broker(8).
+
+[Unit]
+Description=GitHub App token broker
+Documentation=man:github-token-broker(8) man:github-token-broker-config(5)
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/github-token-broker --config /etc/github-token-broker/config.json
+User=github-token-broker
+Group=github-token-broker
+
+# Owns the socket directory, removes it on stop, and recreates it empty, which
+# also clears a socket an unclean stop left behind. 0750 lets the group reach
+# a 0660 socket.
+RuntimeDirectory=github-token-broker
+RuntimeDirectoryMode=0750
+
+# A command line, key, or configuration the broker refused stays refused until
+# an operator changes it, so retrying it would only fill the log.
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=64 66 78
+
+# The broker reads /etc, writes only its runtime directory, and opens a Unix
+# socket to listen and an IP socket to reach GitHub.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

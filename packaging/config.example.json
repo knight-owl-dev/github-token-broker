@@ -1,0 +1,19 @@
+{
+  "app_id": 123456,
+  "installation_id": 789012,
+  "private_key_path": "/etc/github-token-broker/app.pem",
+  "listen": {
+    "unix_socket": {
+      "path": "/run/github-token-broker/broker.sock",
+      "mode": "0660"
+    }
+  },
+  "repositories": {
+    "example-owner/example-repo": {
+      "permissions": {
+        "contents": "write",
+        "pull_requests": "write"
+      }
+    }
+  }
+}
