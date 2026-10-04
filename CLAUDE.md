@@ -86,9 +86,11 @@ one under `tests/` imports the root policy instead of standing alone.
 dictionary's compound matching still admits `colour` and `analyser`. Spelling is
 a review concern, not only a lint one.
 
-**Version is hand-set once**, as `<Version>` in `Directory.Build.props`. Both
-executables inherit it and ship as one package under one tag. The man pages
-carry `@VERSION@`, which `make man-build` replaces into `artifacts/man`.
+**The version moves only by release PR.** It lives once, as `<Version>` in
+`Directory.Build.props`; `make release` stamps it on a `release/vX.Y.Z` branch,
+and merging that PR tags it. Both executables inherit it and ship as one package
+under one tag. The man pages carry `@VERSION@`, which `make man-build` replaces
+into `artifacts/man`, and the release PR dates their `.Dd`.
 
 **An mdoc macro name eats an ordinary word.** `.Ss An occupied path` renders as
 "occupied path", because `An` is the AUTHOR macro; `No`, `In`, `At`, and `St`

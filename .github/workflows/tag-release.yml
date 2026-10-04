@@ -1,0 +1,49 @@
+name: Promote Release Tag
+
+# When a release/vX.Y.Z PR merges, tag its merge commit vX.Y.Z. The tag is
+# pushed under the org App, since one pushed with GITHUB_TOKEN starts no
+# workflow, and publish.yml runs on it.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Promote tag
+    # A fork's PR gets no secrets, so the App token could not be minted anyway;
+    # the same-repo guard keeps it off this path.
+    if: >-
+      github.event.pull_request.merged == true
+      && startsWith(github.event.pull_request.head.ref, 'release/v')
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+
+      - name: Generate GitHub App token
+        id: app-token
+        # contents:write to push the tag.
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Promote tag
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          version="$(./scripts/validate-version.sh "${HEAD_REF#release/v}")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git tag -a "v${version}" -m "github-token-broker v${version}"
+          git push origin "v${version}"

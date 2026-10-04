@@ -1,0 +1,225 @@
+name: Publish
+
+# Builds, packages, and publishes the tag a merged release PR promotes (see
+# release.yml and tag-release.yml). Nothing is published until every asset
+# exists and the .deb has installed on each Debian-family distro in images.json.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-26.04-arm
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      build-image: ${{ steps.read.outputs.build-image }}
+      deb-images: ${{ steps.read.outputs.deb-images }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read
+        id: read
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(./scripts/validate-version.sh "$(./scripts/get-version.sh)")"
+          if [[ "${TAG}" != "v${version}" ]]; then
+            echo "ERROR: tag ${TAG} does not match version ${version} in Directory.Build.props" >&2
+            exit 1
+          fi
+          {
+            echo "version=${version}"
+            echo "build-image=$(./tests/integration/container/build-image.sh)"
+            echo "deb-images=$(jq -c '[.[] | select(.deb) | {image, name: (.image | split("@")[0])}]' \
+              tests/integration/container/images.json)"
+          } >> "${GITHUB_OUTPUT}"
+
+      - uses: ./.github/actions/setup-dotnet
+
+      - name: Test
+        run: make test
+
+  # In the SDK image rather than on the runner: Native AOT links against the
+  # build host's glibc, and the image's is the floor.
+  publish-linux:
+    name: Publish (${{ matrix.rid }})
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    container: ${{ needs.validate.outputs.build-image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-26.04
+          - rid: linux-arm64
+            runner: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install make
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends make
+
+      - name: Publish
+        env:
+          RID: ${{ matrix.rid }}
+        run: make publish RID="${RID}"
+
+      # A tarball because an uploaded artifact drops the executable bit.
+      - name: Pack
+        env:
+          RID: ${{ matrix.rid }}
+        run: |
+          tar --create --file "binaries-${RID}.tar" \
+            artifacts/bin/*/Release/*/"${RID}"/publish/github-token-broker \
+            artifacts/bin/*/Release/*/"${RID}"/publish/github-token
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: binaries-${{ matrix.rid }}
+          path: binaries-${{ matrix.rid }}.tar
+          if-no-files-found: error
+
+  publish-macos:
+    name: Publish (osx-arm64)
+    needs: validate
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-dotnet
+
+      # The Makefile needs bash 5; macOS ships 3.2.
+      - name: Install bash
+        run: brew install bash
+
+      - name: Publish
+        run: make publish RID=osx-arm64
+
+      - name: Pack
+        run: |
+          tar -cf binaries-osx-arm64.tar \
+            artifacts/bin/*/Release/*/osx-arm64/publish/github-token-broker \
+            artifacts/bin/*/Release/*/osx-arm64/publish/github-token
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: binaries-osx-arm64
+          path: binaries-osx-arm64.tar
+          if-no-files-found: error
+
+  package:
+    name: Package (${{ matrix.rid }})
+    needs: [validate, publish-linux, publish-macos]
+    runs-on: ubuntu-26.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [osx-arm64, linux-x64, linux-arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binaries-${{ matrix.rid }}
+
+      - name: Unpack
+        env:
+          RID: ${{ matrix.rid }}
+        run: tar --extract --file "binaries-${RID}.tar"
+
+      - uses: ./.github/actions/setup-nfpm
+        if: startsWith(matrix.rid, 'linux-')
+
+      - name: Package
+        env:
+          RID: ${{ matrix.rid }}
+        run: make package RID="${RID}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist-${{ matrix.rid }}
+          path: artifacts/release/
+          if-no-files-found: error
+
+  test-package:
+    name: Install (${{ matrix.target.name }}, ${{ matrix.arch }})
+    needs: [validate, package]
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.target.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.validate.outputs.deb-images) }}
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-linux-${{ matrix.arch }}
+          path: artifacts/release
+
+      # A host run: the job is already inside the distro, as root.
+      - name: Install
+        run: ./scripts/test-package.sh --env host
+
+  publish-release:
+    name: Publish release
+    needs: [validate, test-package]
+    runs-on: ubuntu-26.04-arm
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: dist-*
+          path: dist
+
+      - name: Checksums
+        run: ./scripts/generate-checksums.sh dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mapfile -t assets < <(find dist -type f \( -name '*.tar.gz' -o -name '*.deb' \))
+          gh release create "${TAG}" --verify-tag --title "github-token-broker ${TAG}" \
+            --generate-notes \
+            "${assets[@]}" artifacts/release/checksums.txt
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: knight-owl-dev
+          repositories: |
+            apt
+            homebrew-tap
+
+      - name: Notify apt and Homebrew
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          gh api repos/knight-owl-dev/apt/dispatches -f event_type=release-published \
+            -f "client_payload[versions]=github-token-broker:${VERSION}"
+          gh api repos/knight-owl-dev/homebrew-tap/dispatches -f event_type=release-published \
+            -f "client_payload[formulas]=github-token-broker:${VERSION}"

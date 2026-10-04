@@ -1,0 +1,37 @@
+# The .deb: both executables and the three man pages. scripts/package-release.sh
+# builds it and supplies ARCH, VERSION, RID, and TFM.
+name: github-token-broker
+arch: "${ARCH}"
+version: "${VERSION}"
+maintainer: "Knight Owl Dev"
+description: "Mints short-lived, repository-scoped GitHub App tokens and supplies them to Git and the GitHub CLI"
+homepage: "https://github.com/knight-owl-dev/github-token-broker"
+license: "MIT"
+
+# The binaries load OpenSSL when they first sign or connect, so nothing infers
+# it from what they link; HTTPS to GitHub needs the CA store; and 2.39 is the
+# glibc floor the binaries are built against.
+depends:
+  - libc6 (>= 2.39)
+  - libssl3t64 | libssl3
+  - ca-certificates
+
+contents:
+  - src: artifacts/bin/KnightOwl.GitHubTokenBroker.Service/Release/${TFM}/${RID}/publish/github-token-broker
+    dst: /usr/bin/github-token-broker
+    expand: true
+    file_info:
+      mode: 0755
+  - src: artifacts/bin/KnightOwl.GitHubTokenBroker.Cli/Release/${TFM}/${RID}/publish/github-token
+    dst: /usr/bin/github-token
+    expand: true
+    file_info:
+      mode: 0755
+  - src: artifacts/man/man1/github-token.1
+    dst: /usr/share/man/man1/github-token.1
+  - src: artifacts/man/man5/github-token-broker-config.5
+    dst: /usr/share/man/man5/github-token-broker-config.5
+  - src: artifacts/man/man8/github-token-broker.8
+    dst: /usr/share/man/man8/github-token-broker.8
+  - src: LICENSE
+    dst: /usr/share/doc/github-token-broker/copyright
