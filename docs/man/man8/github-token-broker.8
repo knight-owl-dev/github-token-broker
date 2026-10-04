@@ -91,10 +91,12 @@ see
 A client in a container joins through the container runtime; see
 .Xr github-token 1 .
 .Pp
-A broker that fails at startup is not restarted, since every startup status
-fails again until an operator acts; see
+A refused command line, key, socket mode, or configuration is not restarted,
+since it fails again until an operator acts; see
 .Sx EXIT STATUS .
-One that stops while serving is restarted after
+Anything else is, including
+.Sy 70 ,
+which also ends a broker that fails while serving: after
 .Sy 5 seconds ,
 at most
 .Sy 5 times a minute .
@@ -325,7 +327,8 @@ The command line was wrong.
 .It Sy 66
 The private key could not be read or parsed.
 .It Sy 70
-Startup failed for a reason the broker does not classify.
+Startup failed for a reason the broker does not classify, or the broker failed
+while serving.
 The message names what threw; the other statuses are the ones an operator acts
 on directly.
 .It Sy 71
@@ -334,8 +337,10 @@ The socket was bound but its mode could not be applied.
 Configuration was missing or invalid, including a listener that could not bind.
 .El
 .Pp
-All of these happen before the broker serves a request, so restarting on
-failure retries a condition that has not changed.
+All but
+.Sy 70
+happen before the broker serves a request, so restarting on them retries a
+condition that has not changed.
 The key has its own status because it is the one fixed somewhere other than the
 configuration file.
 .\" -------------------------------------------------------------------------
