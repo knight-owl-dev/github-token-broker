@@ -73,6 +73,13 @@ LINT_COMPOSE = docker compose -p github-token-broker-lint --file scripts/lint/do
 ALL ?=
 CASES ?=
 
+# Narrow the unit suite to one project with PROJECT=Service, and within it with
+# FILTER="FullyQualifiedName~UnixFileType". FILTER needs PROJECT: across the
+# solution, every other project runs zero tests, which fails the run.
+PROJECT ?=
+FILTER ?=
+TEST_PROJECTS := $(patsubst tests/KnightOwl.GitHubTokenBroker.%.Tests,%,$(wildcard tests/KnightOwl.GitHubTokenBroker.*.Tests))
+
 SOLUTION := github-token-broker.slnx
 
 help: ## Show available targets
@@ -90,8 +97,10 @@ build: ## Build the solution
 clean: ## Remove build output
 	@rm -rf artifacts
 
-test: ## Run the test suite
-	@dotnet test --solution $(SOLUTION)
+test: ## Run the test suite (PROJECT=, FILTER=)
+	@test -z "$(FILTER)" -o -n "$(PROJECT)" || { echo "ERROR: FILTER needs PROJECT=$(subst $(eval) ,|,$(TEST_PROJECTS))" >&2; exit 1; }
+	@dotnet test $(if $(PROJECT),--project tests/KnightOwl.GitHubTokenBroker.$(PROJECT).Tests,--solution $(SOLUTION)) \
+		--results-directory artifacts/TestResults $(if $(FILTER),--filter "$(FILTER)")
 
 publish: ## Publish native binaries for RID (default: this machine's)
 	@test -n "$(RID)" || { echo "ERROR: no RID; host-rid.sh said why above" >&2; exit 1; }

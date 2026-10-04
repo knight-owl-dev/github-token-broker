@@ -455,7 +455,7 @@ withhold it outright.
 
 ```sh
 make build
-make test
+make test                       # PROJECT=Service FILTER=... narrows it
 make lint                       # ENV=container runs the pinned tool image
 make lint-fix                   # apply what can be fixed automatically
 make integration-test           # ENV=container for the Linux matrix
