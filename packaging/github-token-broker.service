@@ -4,6 +4,10 @@
 [Unit]
 Description=GitHub App token broker
 Documentation=man:github-token-broker(8) man:github-token-broker-config(5)
+# RestartSec=5 never reaches the default 5 starts in 10 seconds; these do, so
+# a broker that keeps dying after it starts serving is eventually left down.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=exec
@@ -17,11 +21,11 @@ Group=github-token-broker
 RuntimeDirectory=github-token-broker
 RuntimeDirectoryMode=0750
 
-# A command line, key, or configuration the broker refused stays refused until
-# an operator changes it, so retrying it would only fill the log.
+# Every startup status fails again until an operator acts (see EXIT STATUS in
+# github-token-broker(8)), so only a broker that dies while serving restarts.
 Restart=on-failure
 RestartSec=5
-RestartPreventExitStatus=64 66 78
+RestartPreventExitStatus=64 66 70 71 78
 
 # The broker reads /etc, writes only its runtime directory, and opens a Unix
 # socket to listen and an IP socket to reach GitHub.

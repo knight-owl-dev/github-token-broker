@@ -91,9 +91,13 @@ see
 A client in a container joins through the container runtime; see
 .Xr github-token 1 .
 .Pp
-A refused command line, key, or configuration is not restarted; anything else
-is, after
-.Sy 5 seconds .
+A broker that fails at startup is not restarted, since every startup status
+fails again until an operator acts; see
+.Sx EXIT STATUS .
+One that stops while serving is restarted after
+.Sy 5 seconds ,
+at most
+.Sy 5 times a minute .
 .\" -------------------------------------------------------------------------
 .Sh LOGGING
 Two streams, split by whether the broker went on to serve.

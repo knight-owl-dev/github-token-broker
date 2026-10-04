@@ -43,7 +43,7 @@ if deb-systemd-helper debian-installed "${UNIT}"; then
 fi
 deb-systemd-helper update-state "${UNIT}" > /dev/null || true
 
-if [ -d /run/systemd/system ]; then
+if [ -z "${DPKG_ROOT:-}" ] && [ -d /run/systemd/system ]; then
   systemctl --system daemon-reload > /dev/null || true
   # An upgrade restarts a running broker on the new binary; nothing else starts.
   if [ -n "$2" ]; then
