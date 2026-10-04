@@ -41,6 +41,10 @@ installation tokens, and a client that supplies them to Git and the GitHub CLI.
 - A breaking wire change adds `Infrastructure.Contracts.V2` alongside `V1`, which
   keeps working for one release, then goes. `BrokerProtocol` holds what outlives
   any version: `/health` and the request limit.
+- A configuration a release accepts, every later release accepts. An upgrade
+  restarts the broker on the operator's file, and one it now refuses exits `78`,
+  which the unit leaves down on every upgraded host. Deprecate a setting; never
+  reject one that used to work.
 - **Confirm an assertion can fail before believing it.** A false pass is
   indistinguishable from a real one, so the shapes that produce them are ruled out
   by construction: a case that cannot run reports `[SKIP]` and exits 3 rather than
