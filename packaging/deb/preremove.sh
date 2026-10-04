@@ -3,10 +3,11 @@
 set -e
 
 #
-# A removal stops and disables the broker before its binary goes. An upgrade
-# leaves it running, for postinstall to restart on the new binary.
+# A removal stops the broker before its binary goes. Its enablement stays, so a
+# reinstall brings it back; the purge clears it. An upgrade leaves it running,
+# for postinstall to restart on the new binary.
 #
 
-if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
-  systemctl disable --now github-token-broker.service
+if [ -z "${DPKG_ROOT:-}" ] && [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+  deb-systemd-invoke stop github-token-broker.service > /dev/null || true
 fi

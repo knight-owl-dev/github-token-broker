@@ -105,7 +105,27 @@ check "the example configuration parses, stopping at the missing key with 66" br
 apt-get install -y -qq --no-install-recommends systemd > /dev/null
 check "systemd-analyze verifies the unit without a warning" unit_verifies
 
+unit_is_enabled() {
+  [[ -L /etc/systemd/system/multi-user.target.wants/github-token-broker.service ]]
+}
+
+# Enabling works without a running systemd, as an image build does it, which
+# also shows the not-enabled check above could have failed.
+systemctl enable github-token-broker.service > /dev/null 2>&1
+check "an offline enable links the unit" unit_is_enabled
+
+apt-get remove -y -qq github-token-broker > /dev/null
+apt-get install -y -qq "${DEB}" > /dev/null
+check "a remove and reinstall keeps the unit enabled" unit_is_enabled
+
 apt-get purge -y -qq github-token-broker > /dev/null
 check "a purge removes the binaries" test ! -e /usr/bin/github-token-broker
+check "a purge removes the unit's enablement" unit_is_disabled
 check "a purge removes the empty configuration directory" test ! -e /etc/github-token-broker
 check "a purge keeps the account" getent passwd github-token-broker
+
+# An operator may have deleted the configuration directory before purging.
+apt-get install -y -qq "${DEB}" > /dev/null
+rm -rf /etc/github-token-broker
+check "a purge succeeds with the configuration directory already gone" \
+  apt-get purge -y -qq github-token-broker

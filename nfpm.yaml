@@ -18,6 +18,8 @@ depends:
   - ca-certificates
   # useradd, for the account postinstall creates.
   - passwd
+  # deb-systemd-helper and deb-systemd-invoke, which the maintainer scripts use.
+  - init-system-helpers
 
 contents:
   - src: artifacts/bin/KnightOwl.GitHubTokenBroker.Service/Release/${TFM}/${RID}/publish/github-token-broker

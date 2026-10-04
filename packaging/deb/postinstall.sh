@@ -4,10 +4,19 @@ set -e
 
 #
 # Create the account the unit runs as and the directory its configuration lives
-# in, then tell the operator what is left: the unit installs inert.
+# in, and register the unit without enabling it: the broker cannot start before
+# an operator supplies a key and a configuration.
 #
-# dpkg runs this on every install and upgrade, so each step is idempotent.
+# The systemd steps follow dh_installsystemd's, so enablement survives a
+# reinstall and a purge clears it, as for any Debian service.
 #
+
+UNIT=github-token-broker.service
+
+case "$1" in
+  configure | abort-upgrade | abort-deconfigure | abort-remove) ;;
+  *) exit 0 ;;
+esac
 
 # Nothing logs in as the account, and it owns no home.
 if ! getent passwd github-token-broker > /dev/null; then
@@ -18,10 +27,22 @@ fi
 # The configuration is not secret; the key, mode 0400, is the operator's to own.
 install -d -m 0755 /etc/github-token-broker
 
+# Re-enable a unit the operator had enabled before a remove and reinstall, and
+# record its state for the purge to clean up.
+if deb-systemd-helper debian-installed "${UNIT}"; then
+  deb-systemd-helper unmask "${UNIT}" > /dev/null || true
+  if deb-systemd-helper --quiet was-enabled "${UNIT}"; then
+    deb-systemd-helper enable "${UNIT}" > /dev/null || true
+  fi
+fi
+deb-systemd-helper update-state "${UNIT}" > /dev/null || true
+
 if [ -d /run/systemd/system ]; then
-  systemctl daemon-reload
+  systemctl --system daemon-reload > /dev/null || true
   # An upgrade restarts a running broker on the new binary; nothing else starts.
-  systemctl try-restart github-token-broker.service
+  if [ -n "$2" ]; then
+    deb-systemd-invoke try-restart "${UNIT}" > /dev/null || true
+  fi
 fi
 
 if [ ! -f /etc/github-token-broker/config.json ]; then

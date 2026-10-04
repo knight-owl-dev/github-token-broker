@@ -25,6 +25,7 @@
     "blittable",
     "buildx",
     "coverlet",
+    "deconfigure",
     "distros",
     "dotnet",
     "errno",
