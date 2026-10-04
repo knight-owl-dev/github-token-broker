@@ -93,8 +93,8 @@ see
 A client in a container joins through the container runtime; see
 .Xr github-token 1 .
 .Pp
-A refused command line, key, socket mode, or configuration is not restarted,
-since it fails again until an operator acts; see
+A refused command line, key, socket mode, socket path, or configuration is not
+restarted, since it fails again until an operator acts; see
 .Sx EXIT STATUS .
 Anything else is restarted after
 .Sy 5 seconds ,
@@ -247,7 +247,7 @@ or a symbolic link, which is not followed.
 .El
 .Bd -literal -offset indent
 $ github-token-broker --config /etc/github-token-broker/config.json
-configuration error: Another process is already listening on
+listener error: Another process is already listening on
 "/run/github-token-broker/broker.sock".
 .Ed
 .Pp
@@ -349,16 +349,20 @@ The message names what threw; the other statuses are the ones an operator acts
 on directly.
 .It Sy 71
 The socket was bound but its mode could not be applied.
+.It Sy 73
+The socket directory was unsafe or could not be created, or the socket path
+could not be freed or bound; see
+.Sx TRANSPORTS .
 .It Sy 78
-Configuration was missing or invalid, including a listener that could not bind.
+Configuration was missing or invalid.
 .El
 .Pp
 All but
 .Sy 70
 happen before the broker serves a request, so restarting on them retries a
 condition that has not changed.
-The key has its own status because it is the one fixed somewhere other than the
-configuration file.
+The key and the socket path have their own statuses because they are fixed
+somewhere other than the configuration file.
 .\" -------------------------------------------------------------------------
 .Sh EXAMPLES
 Run against a configuration file:

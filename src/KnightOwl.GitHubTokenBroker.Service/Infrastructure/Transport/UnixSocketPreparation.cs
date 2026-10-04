@@ -23,7 +23,8 @@ public static class UnixSocketPreparation
     /// <summary>Frees the path to bind, or throws explaining what holds it.</summary>
     /// <param name="socketPath">Absolute path the broker intends to bind.</param>
     /// <returns>Whether the path was free, or held a dead socket that was removed.</returns>
-    /// <exception cref="ConfigurationException">
+    /// <exception cref="ConfigurationException">The socket path names no directory.</exception>
+    /// <exception cref="UnixSocketPathException">
     /// The directory could not be made safe, or something other than a dead socket occupies the path.
     /// </exception>
     public static UnixSocketPathState Prepare(string socketPath)
@@ -58,18 +59,18 @@ public static class UnixSocketPreparation
             UnixFileKind.Missing => UnixSocketPathState.Free,
 
             UnixFileKind.SymbolicLink
-                => throw new ConfigurationException($"The socket path \"{socketPath}\" is a symbolic link, which the broker does not follow."),
+                => throw new UnixSocketPathException($"The socket path \"{socketPath}\" is a symbolic link, which the broker does not follow."),
 
             UnixFileKind.Socket => RemoveIfDead(socketPath),
 
             UnixFileKind.Other when Directory.Exists(socketPath)
-                => throw new ConfigurationException($"The socket path \"{socketPath}\" is a directory."),
+                => throw new UnixSocketPathException($"The socket path \"{socketPath}\" is a directory."),
 
             UnixFileKind.Other
-                => throw new ConfigurationException($"The socket path \"{socketPath}\" holds a file that is not a socket."),
+                => throw new UnixSocketPathException($"The socket path \"{socketPath}\" holds a file that is not a socket."),
 
             UnixFileKind.Unknown
-                => throw new ConfigurationException($"The type of the file at \"{socketPath}\" could not be read."),
+                => throw new UnixSocketPathException($"The type of the file at \"{socketPath}\" could not be read."),
         };
     }
 
@@ -84,7 +85,7 @@ public static class UnixSocketPreparation
         catch (Exception exception)
             when (exception is IOException or UnauthorizedAccessException)
         {
-            throw new ConfigurationException(
+            throw new UnixSocketPathException(
                 $"The dead socket at \"{socketPath}\" could not be removed.",
                 exception
             );
@@ -114,7 +115,7 @@ public static class UnixSocketPreparation
             catch (Exception exception)
                 when (exception is IOException or UnauthorizedAccessException)
             {
-                throw new ConfigurationException(
+                throw new UnixSocketPathException(
                     $"The socket directory \"{parent}\" could not be created.",
                     exception
                 );
@@ -142,7 +143,7 @@ public static class UnixSocketPreparation
         // /tmp safe: everyone may create, only the owner may unlink.
         if (writableByOthers && !mode.HasFlag(UnixFileMode.StickyBit))
         {
-            throw new ConfigurationException($"The socket directory \"{parent}\" is writable beyond its owner and is not sticky (mode {Format(mode)}).");
+            throw new UnixSocketPathException($"The socket directory \"{parent}\" is writable beyond its owner and is not sticky (mode {Format(mode)}).");
         }
     }
 
@@ -179,12 +180,12 @@ public static class UnixSocketPreparation
         catch (SocketException exception)
         {
             // Denied or busy, which a live socket answers too.
-            throw new ConfigurationException(
+            throw new UnixSocketPathException(
                 $"The socket at \"{socketPath}\" could not be probed, so it is left in place.",
                 exception
             );
         }
 
-        throw new ConfigurationException($"Another process is already listening on \"{socketPath}\".");
+        throw new UnixSocketPathException($"Another process is already listening on \"{socketPath}\".");
     }
 }

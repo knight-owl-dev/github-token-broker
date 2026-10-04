@@ -74,6 +74,11 @@ internal static class BrokerHost
             {
                 pathState = UnixSocketPreparation.Prepare(listen.UnixSocket.Path);
             }
+            catch (UnixSocketPathException exception)
+            {
+                await DiagnosticReport.WriteAsync(Console.Error, "listener error", exception);
+                return BrokerExitCode.SocketPath;
+            }
             catch (ConfigurationException exception)
             {
                 await DiagnosticReport.WriteAsync(Console.Error, "configuration error", exception);
@@ -105,7 +110,7 @@ internal static class BrokerHost
                 // Kestrel binds when the host starts rather than when it is built,
                 // so a path UnixSocketPreparation could not rule out arrives here.
                 await DiagnosticReport.WriteAsync(Console.Error, "listener error", exception);
-                return BrokerExitCode.Configuration;
+                return BrokerExitCode.SocketPath;
             }
 
             try

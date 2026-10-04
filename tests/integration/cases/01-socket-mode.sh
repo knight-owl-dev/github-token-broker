@@ -84,7 +84,7 @@ fixture_config "${SCENARIO_CONFIG}" "${SCENARIO_ROOT}/app.pem" --socket "${SCENA
 chmod 0770 "${SCENARIO_SOCKET_DIR}"
 run_capture github-token-broker --config "${SCENARIO_CONFIG}"
 
-assert_eq "a group-writable socket directory refuses startup" 78 "${RUN_STATUS}"
+assert_eq "a group-writable socket directory refuses startup" 73 "${RUN_STATUS}"
 assert_contains "and says why" "${RUN_STDERR}" "writable beyond its owner"
 
 scenario sticky-directory
@@ -109,7 +109,7 @@ fixture_config "${SCENARIO_CONFIG}" "${SCENARIO_ROOT}/app.pem" --socket "${SCENA
 echo "important" > "${SCENARIO_SOCKET}"
 run_capture github-token-broker --config "${SCENARIO_CONFIG}"
 
-assert_eq "a regular file at the socket path refuses startup" 78 "${RUN_STATUS}"
+assert_eq "a regular file at the socket path refuses startup" 73 "${RUN_STATUS}"
 assert_contains "and says it is not a socket" "${RUN_STDERR}" "not a socket"
 
 if [[ -f "${SCENARIO_SOCKET}" ]]; then
@@ -125,7 +125,7 @@ touch "${SCENARIO_ROOT}/target"
 ln -s "${SCENARIO_ROOT}/target" "${SCENARIO_SOCKET}"
 run_capture github-token-broker --config "${SCENARIO_CONFIG}"
 
-assert_eq "a symbolic link at the socket path refuses startup" 78 "${RUN_STATUS}"
+assert_eq "a symbolic link at the socket path refuses startup" 73 "${RUN_STATUS}"
 assert_contains "and says so" "${RUN_STDERR}" "symbolic link"
 
 scenario live-listener
@@ -134,7 +134,7 @@ broker_start "${SCENARIO_CONFIG}" "${SCENARIO_LOG}"
 
 if broker_wait_socket; then
   run_capture github-token-broker --config "${SCENARIO_CONFIG}"
-  assert_eq "a second broker on a live socket refuses startup" 78 "${RUN_STATUS}"
+  assert_eq "a second broker on a live socket refuses startup" 73 "${RUN_STATUS}"
   assert_contains "and names the listener" "${RUN_STDERR}" "already listening"
 else
   fail_with_log "a second broker on a live socket refuses startup"

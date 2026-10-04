@@ -340,7 +340,7 @@ names. See `github-token-broker(8)`.
 
 ```console
 $ github-token-broker --config /etc/github-token-broker/config.json
-configuration error: The socket path "/run/github-token-broker/broker.sock" holds
+listener error: The socket path "/run/github-token-broker/broker.sock" holds
 a file that is not a socket.
 ```
 

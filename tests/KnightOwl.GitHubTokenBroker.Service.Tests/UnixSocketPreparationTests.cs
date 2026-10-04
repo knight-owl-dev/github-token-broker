@@ -58,7 +58,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         listener.Bind(new UnixDomainSocketEndPoint(socketPath));
         listener.Listen(1);
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(socketPath));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(socketPath));
 
         Assert.Contains("already listening", failure.Message, StringComparison.Ordinal);
         Assert.True(File.Exists(socketPath));
@@ -79,7 +79,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         listener.Listen(1);
         File.SetUnixFileMode(socketPath, UnixFileMode.None);
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(socketPath));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(socketPath));
 
         Assert.Contains("could not be probed", failure.Message, StringComparison.Ordinal);
         Assert.True(File.Exists(socketPath));
@@ -91,7 +91,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         var directoryPath = Path("a-directory");
         Directory.CreateDirectory(directoryPath);
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(directoryPath));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(directoryPath));
 
         Assert.Contains("is a directory", failure.Message, StringComparison.Ordinal);
         Assert.True(Directory.Exists(directoryPath));
@@ -103,7 +103,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         var link = Path("directory-link.sock");
         File.CreateSymbolicLink(link, Directory.CreateDirectory(Path("target-directory")).FullName);
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(link));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(link));
 
         Assert.Contains("symbolic link", failure.Message, StringComparison.Ordinal);
     }
@@ -116,7 +116,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         File.WriteAllText(target, "important");
         File.CreateSymbolicLink(link, target);
 
-        Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(link));
+        Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(link));
 
         // Neither the link nor what it points at may be removed.
         Assert.True(File.Exists(link));
@@ -136,7 +136,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         var link = Path("dangling.sock");
         File.CreateSymbolicLink(link, Path("absent"));
 
-        var failure = Assert.Throws<ConfigurationException>(
+        var failure = Assert.Throws<UnixSocketPathException>(
             () => UnixSocketPreparation.Prepare(link)
         );
 
@@ -156,7 +156,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
         var filePath = Path("data.sock");
         File.WriteAllText(filePath, contents);
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(filePath));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(filePath));
 
         Assert.Contains("not a socket", failure.Message, StringComparison.Ordinal);
         Assert.True(File.Exists(filePath));
@@ -191,7 +191,7 @@ public sealed class UnixSocketPreparationTests : IDisposable
             | UnixFileMode.OtherExecute
         );
 
-        var failure = Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
+        var failure = Assert.Throws<UnixSocketPathException>(() => UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
 
         Assert.Contains("writable beyond its owner", failure.Message, StringComparison.Ordinal);
     }
@@ -236,6 +236,10 @@ public sealed class UnixSocketPreparationTests : IDisposable
 
         Assert.Equal(UnixSocketPathState.Free, UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
     }
+
+    [Fact]
+    public void TreatsAPathWithNoDirectoryAsConfiguration()
+        => Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare("broker.sock"));
 
     [Fact]
     public void RejectsAnEmptyPath()

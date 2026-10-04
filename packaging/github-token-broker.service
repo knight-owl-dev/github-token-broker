@@ -22,13 +22,13 @@ RuntimeDirectory=github-token-broker
 RuntimeDirectoryMode=0750
 RuntimeDirectoryPreserve=yes
 
-# A command line, key, socket mode, or configuration the broker refused fails
-# again until an operator acts. 70 restarts: the broker exits with it both on
-# an unclassified startup failure and on dying while serving, and the start
-# limit above bounds the first.
+# A command line, key, socket mode, socket path, or configuration the broker
+# refused fails again until an operator acts. 70 restarts: the broker exits with
+# it both on an unclassified startup failure and on dying while serving, and the
+# start limit above bounds the first.
 Restart=on-failure
 RestartSec=5
-RestartPreventExitStatus=64 66 71 78
+RestartPreventExitStatus=64 66 71 73 78
 
 # The broker reads /etc, writes only its runtime directory, and opens a Unix
 # socket to listen and an IP socket to reach GitHub.

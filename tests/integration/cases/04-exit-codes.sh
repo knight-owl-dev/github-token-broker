@@ -236,7 +236,7 @@ fi
 
 broker_stop
 
-# --- 78, a listener that cannot bind ------------------------------------------
+# --- 73, a socket path already in use -----------------------------------------
 #
 # A broker already serving the path answers the probe, so a second refuses. What
 # else occupies a path, and when a left socket is reclaimed, is 01-socket-mode.
@@ -249,8 +249,8 @@ broker_start "${BUSY_CONFIG}" "${WORK}/busy-broker.log"
 
 if broker_wait_socket; then
   broker --config "${BUSY_CONFIG}"
-  assert_eq "a socket already bound is a configuration error" 78 "${RUN_STATUS}"
-  assert_contains "and reports rather than aborting" "${RUN_STDERR}" "configuration error"
+  assert_eq "a socket already bound is a listener error" 73 "${RUN_STATUS}"
+  assert_contains "and reports rather than aborting" "${RUN_STDERR}" "listener error"
   assert_contains "naming the path it could not have" "${RUN_STDERR}" "${BUSY_SOCKET}"
 else
   BROKER_OUTPUT="$(broker_log)"
