@@ -69,6 +69,28 @@ internal static class BrokerHost
             ArgumentNullException.ThrowIfNull(app);
             ArgumentNullException.ThrowIfNull(listen);
 
+            UnixSocketPathState pathState;
+            try
+            {
+                pathState = UnixSocketPreparation.Prepare(listen.UnixSocket.Path);
+            }
+            catch (ConfigurationException exception)
+            {
+                await DiagnosticReport.WriteAsync(Console.Error, "configuration error", exception);
+                return BrokerExitCode.Configuration;
+            }
+            catch (Exception exception)
+            {
+                await DiagnosticReport.WriteAsync(Console.Error, "internal error", exception);
+                return BrokerExitCode.Internal;
+            }
+
+            // Before binding, so the removal is on record even when the bind fails.
+            if (pathState is UnixSocketPathState.Reclaimed)
+            {
+                BrokerHostLog.UnixSocketReclaimed(app.Logger, listen.UnixSocket.Path);
+            }
+
             try
             {
                 // Binding creates the socket file, and its mode then comes from the
