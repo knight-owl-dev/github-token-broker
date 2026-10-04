@@ -44,6 +44,13 @@
       "datasourceTemplate": "docker"
     },
     {
+      // nfpm, installed by setup-nfpm. depName is the module path, short of /cmd/.
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/actions/.+/action\\.ya?ml$/"],
+      "matchStrings": ["go install (?<depName>[^@\\s]+?)/cmd/[^@\\s]+@(?<currentValue>v\\S+)"],
+      "datasourceTemplate": "go"
+    },
+    {
       // The GitHub CLI the integration cases install.
       "customType": "regex",
       "managerFilePatterns": ["/^tests/integration/container/prepare\\.sh$/"],
@@ -106,10 +113,10 @@
       "groupName": "actions (minor and patch)"
     },
 
-    // Matched by datasource, not manager: the matrix legs come from a custom
-    // manager.
+    // Matched by datasource, not manager: the matrix legs and nfpm come from
+    // custom managers.
     {
-      "matchDatasources": ["github-runners"],
+      "matchDatasources": ["github-runners", "golang-version", "go"],
       "labels": ["dependencies", "github-actions"]
     }
   ]

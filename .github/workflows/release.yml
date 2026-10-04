@@ -1,0 +1,73 @@
+name: Release
+
+# Opens a release PR that stamps the next version into Directory.Build.props.
+# The version is bumped from the latest release tag, or set explicitly, which
+# wins. Merging the PR promotes tag vX.Y.Z (tag-release.yml), which publishes
+# the release (publish.yml).
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump from the latest release tag"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      version:
+        description: "Explicit version (e.g. 1.3.0); overrides bump if set"
+        required: false
+        type: string
+      automerge:
+        description: "Merge the release PR once its checks pass"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Two dispatches at once would both pass release.sh's open-PR check.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Open release PR
+    runs-on: ubuntu-26.04-arm
+    steps:
+      # The PR bases on the default branch and the tag promotes off its merge,
+      # so a dispatch from any other branch is refused.
+      - name: Guard default branch
+        if: github.ref_name != github.event.repository.default_branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          echo "ERROR: dispatch a release from ${DEFAULT_BRANCH}, not ${REF_NAME}" >&2
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate GitHub App token
+        id: app-token
+        # contents:write to push the release branch, pull-requests:write to open
+        # the PR. A PR opened with GITHUB_TOKEN would start no CI.
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Open release PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ inputs.version }}
+          BUMP: ${{ inputs.bump }}
+          AUTOMERGE: ${{ inputs.automerge && '1' || '' }}
+        run: make release RELEASE="${VERSION:-${BUMP}}"

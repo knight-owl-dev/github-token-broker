@@ -18,7 +18,7 @@ ifeq ($(filter-out 0 1 2 3 4,$(BASH_MAJOR)),)
 $(error The scripts need bash 5 or newer, and the bash on PATH is version $(or $(BASH_MAJOR),unknown). On macOS, run "brew install bash")
 endif
 
-.PHONY: help restore build clean test publish integration-test package test-package man man-build \
+.PHONY: help restore build clean test publish integration-test package test-package release man man-build \
 	lint lint-tools lint-fix lint-dotnet lint-dotnet-fix lint-shfmt lint-shfmt-fix \
 	lint-shellcheck lint-actions lint-markdown lint-spelling lint-docker lint-control-characters \
 	lint-mandoc
@@ -107,6 +107,10 @@ package: man-build ## Package RID's published binaries: a tarball, and a .deb fo
 
 test-package: ## Install the .deb on the Debian-family images (ENV=host|container)
 	@./scripts/test-package.sh --env $(ENV)
+
+release: ## Open a release PR (RELEASE=patch|minor|major|X.Y.Z, AUTOMERGE=1)
+	@test -n "$(RELEASE)" || { echo "ERROR: name the release: RELEASE=patch, minor, major, or X.Y.Z" >&2; exit 1; }
+	@AUTOMERGE="$(AUTOMERGE)" ./scripts/release.sh $(RELEASE)
 
 man-build: ## Stamp the man pages into artifacts/man
 	@./scripts/stamp-man-pages.sh
