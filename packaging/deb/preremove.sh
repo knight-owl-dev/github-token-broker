@@ -4,7 +4,7 @@ set -e
 
 #
 # A removal stops the broker before its binary goes. Its enablement stays, so a
-# reinstall brings it back; the purge clears it. An upgrade leaves it running,
+# reinstall starts it again; the purge clears it. An upgrade leaves it running,
 # for postinstall to restart on the new binary.
 #
 

@@ -94,12 +94,16 @@ A client in a container joins through the container runtime; see
 A refused command line, key, socket mode, or configuration is not restarted,
 since it fails again until an operator acts; see
 .Sx EXIT STATUS .
-Anything else is, including
-.Sy 70 ,
-which also ends a broker that fails while serving: after
+Anything else is restarted after
 .Sy 5 seconds ,
-at most
-.Sy 5 times a minute .
+including
+.Sy 70 ,
+which also ends a broker that fails while serving.
+After
+.Sy 5 starts within a minute ,
+systemd leaves it down until an operator runs
+.Ql systemctl reset-failed github-token-broker
+or starts it.
 .\" -------------------------------------------------------------------------
 .Sh LOGGING
 Two streams, split by whether the broker went on to serve.

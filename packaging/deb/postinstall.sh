@@ -45,9 +45,11 @@ deb-systemd-helper update-state "${UNIT}" > /dev/null || true
 
 if [ -z "${DPKG_ROOT:-}" ] && [ -d /run/systemd/system ]; then
   systemctl --system daemon-reload > /dev/null || true
-  # An upgrade restarts a running broker on the new binary; nothing else starts.
+  # An upgrade, or a reinstall after a remove, restarts an enabled broker on the
+  # new binary; deb-systemd-invoke leaves a unit the operator never enabled
+  # alone, and a first install starts nothing.
   if [ -n "$2" ]; then
-    deb-systemd-invoke try-restart "${UNIT}" > /dev/null || true
+    deb-systemd-invoke restart "${UNIT}" > /dev/null || true
   fi
 fi
 
