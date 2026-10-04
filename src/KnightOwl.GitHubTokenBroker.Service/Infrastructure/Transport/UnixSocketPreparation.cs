@@ -54,12 +54,14 @@ public static class UnixSocketPreparation
             return UnixSocketPathState.Free;
         }
 
-        return UnixFileType.Of(socketPath) switch
+        return UnixFileStatus.Of(socketPath).Kind switch
         {
             UnixFileKind.Missing => UnixSocketPathState.Free,
 
             UnixFileKind.SymbolicLink
-                => throw new UnixSocketPathException($"The socket path \"{socketPath}\" is a symbolic link, which the broker does not follow."),
+                => throw new UnixSocketPathException(
+                    $"The socket path \"{socketPath}\" is a symbolic link, which the broker does not follow."
+                ),
 
             UnixFileKind.Socket => RemoveIfDead(socketPath),
 
@@ -67,7 +69,9 @@ public static class UnixSocketPreparation
                 => throw new UnixSocketPathException($"The socket path \"{socketPath}\" is a directory."),
 
             UnixFileKind.Other
-                => throw new UnixSocketPathException($"The socket path \"{socketPath}\" holds a file that is not a socket."),
+                => throw new UnixSocketPathException(
+                    $"The socket path \"{socketPath}\" holds a file that is not a socket."
+                ),
 
             UnixFileKind.Unknown
                 => throw new UnixSocketPathException($"The type of the file at \"{socketPath}\" could not be read."),
@@ -101,51 +105,89 @@ public static class UnixSocketPreparation
     {
         if (!Directory.Exists(parent))
         {
-            try
-            {
-                if (OperatingSystem.IsWindows())
-                {
-                    Directory.CreateDirectory(parent);
-                }
-                else
-                {
-                    Directory.CreateDirectory(parent, DirectoryMode);
-                }
-            }
-            catch (Exception exception)
-                when (exception is IOException or UnauthorizedAccessException)
-            {
-                throw new UnixSocketPathException(
-                    $"The socket directory \"{parent}\" could not be created.",
-                    exception
-                );
-            }
-
-            return;
+            CreateOwnerOnly(parent);
         }
-
-        if (OperatingSystem.IsWindows())
+        else if (!OperatingSystem.IsWindows())
         {
-            return;
+            RefuseForeignOwner(parent);
+            RefuseSharedWrite(parent);
         }
+    }
 
-        // Write on the directory is the right to unlink the socket and bind another
-        // in its place, so it is refused even when the socket's own mode is narrow.
-        // Traversal for a group stays available through 0750.
-        //
-        // The owner is not checked: .NET exposes none, and UnixFileType reads only the type.
-        // What that leaves open is in github-token-broker(8).
-        var mode = new DirectoryInfo(parent).UnixFileMode;
+    /// <summary>Creates the socket directory, readable and writable by its owner alone.</summary>
+    /// <param name="directory">The directory holding the socket.</param>
+    private static void CreateOwnerOnly(string directory)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                Directory.CreateDirectory(directory);
+            }
+            else
+            {
+                Directory.CreateDirectory(directory, DirectoryMode);
+            }
+        }
+        catch (Exception exception)
+            when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new UnixSocketPathException(
+                $"The socket directory \"{directory}\" could not be created.",
+                exception
+            );
+        }
+    }
+
+    /// <summary>Refuses a socket directory that others may write, unless it is sticky.</summary>
+    /// <param name="directory">The directory holding the socket.</param>
+    /// <remarks>
+    /// Write on the directory is the right to unlink the socket and bind another in its place,
+    /// so it is refused even when the socket's own mode is narrow. The sticky bit is what makes a
+    /// shared directory like <c>/tmp</c> safe: everyone may create, only the owner may unlink.
+    /// Traversal for a group stays available through <c>0750</c>.
+    /// </remarks>
+    private static void RefuseSharedWrite(string directory)
+    {
+        var mode = new DirectoryInfo(directory).UnixFileMode;
         var writableByOthers =
             mode.HasFlag(UnixFileMode.GroupWrite) || mode.HasFlag(UnixFileMode.OtherWrite);
 
-        // Unless the sticky bit is set, which is what makes a shared directory like
-        // /tmp safe: everyone may create, only the owner may unlink.
         if (writableByOthers && !mode.HasFlag(UnixFileMode.StickyBit))
         {
-            throw new UnixSocketPathException($"The socket directory \"{parent}\" is writable beyond its owner and is not sticky (mode {Format(mode)}).");
+            throw new UnixSocketPathException(
+                $"The socket directory \"{directory}\" is writable beyond its owner and is not sticky (mode {Format(mode)})."
+            );
         }
     }
+
+    /// <summary>
+    /// Refuses a socket directory, or a link naming it, that belongs to another account.
+    /// </summary>
+    /// <param name="directory">The directory holding the socket.</param>
+    /// <remarks>
+    /// The owner may unlink the socket whatever the mode says; root can anyway. A link's
+    /// owner may replace it in a sticky directory, so the link the path names is judged as
+    /// well. Links further along the chain are not, like the directories above.
+    /// </remarks>
+    private static void RefuseForeignOwner(string directory)
+    {
+        var owner = ForeignOwner(UnixFileStatus.Of(directory))
+            ?? ForeignOwner(UnixFileStatus.OfTarget(directory));
+
+        if (owner is { } uid)
+        {
+            throw new UnixSocketPathException(
+                $"The socket directory \"{directory}\" belongs to another account (uid {uid})."
+            );
+        }
+    }
+
+    /// <summary>The owner of a file when it is neither this account nor root.</summary>
+    /// <param name="status">The file to judge.</param>
+    /// <returns>The foreign owner's id, or <see langword="null"/> when the owner is acceptable or unknown.</returns>
+    private static uint? ForeignOwner(UnixFileStatus status)
+        => status.OwnerId is { } owner and not 0 && owner != UnixProcess.EffectiveUserId ? owner : null;
 
     /// <summary>Renders a mode as the octal an operator wrote in configuration.</summary>
     /// <param name="mode">The mode to render.</param>
@@ -166,7 +208,7 @@ public static class UnixSocketPreparation
         {
             probe.Connect(new UnixDomainSocketEndPoint(socketPath));
         }
-        catch (SocketException) when (UnixFileType.Of(socketPath) == UnixFileKind.Missing)
+        catch (SocketException) when (UnixFileStatus.Of(socketPath).Kind is UnixFileKind.Missing)
         {
             // Unlinked since its type was read, by a broker stopping cleanly.
             return UnixSocketPathState.Free;

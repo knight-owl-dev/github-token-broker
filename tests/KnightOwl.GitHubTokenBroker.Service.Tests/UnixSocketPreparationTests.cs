@@ -237,6 +237,14 @@ public sealed class UnixSocketPreparationTests : IDisposable
         Assert.Equal(UnixSocketPathState.Free, UnixSocketPreparation.Prepare(System.IO.Path.Combine(directory, "broker.sock")));
     }
 
+    /// <remarks>Root can unlink the socket regardless, so a directory it owns is no gap.</remarks>
+    [Fact]
+    public void AcceptsADirectoryRootOwns()
+        => Assert.Equal(
+            UnixSocketPathState.Free,
+            UnixSocketPreparation.Prepare($"/tmp/hgb-{Guid.NewGuid():N}.sock")
+        );
+
     [Fact]
     public void TreatsAPathWithNoDirectoryAsConfiguration()
         => Assert.Throws<ConfigurationException>(() => UnixSocketPreparation.Prepare("broker.sock"));

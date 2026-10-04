@@ -329,7 +329,9 @@ who may mint. Its directory is the outer half of that control, and covers the
 moment between binding and the mode being applied: the broker creates it `0700`
 when absent, and refuses to start when it already exists and is writable by
 anyone but its owner — unless the sticky bit is set, which is what makes a
-shared directory like `/tmp` safe.
+shared directory like `/tmp` safe. It also refuses a directory, or a link naming
+it, that belongs to any account but the broker's or root; `github-token-broker(8)`
+has what that leaves open.
 
 A socket an unclean shutdown left is removed and bound again; anything else at
 the path is refused and left in place, so a mistyped path never deletes what it

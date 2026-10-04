@@ -22,8 +22,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <!-- LibraryImport generates its marshalling as unsafe code; UnixFileType
-             is the only caller, reading a file's type from lstat. -->
+        <!-- LibraryImport generates its marshalling as unsafe code, for the libc calls. -->
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
