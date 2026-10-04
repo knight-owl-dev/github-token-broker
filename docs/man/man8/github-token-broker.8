@@ -62,6 +62,38 @@ Run it as a dedicated account that does nothing else.
 That account owns the private key, mode
 .Ql 0400 ,
 and the socket directory.
+.Pp
+The Debian package creates that account,
+.Ql github-token-broker ,
+and installs a systemd unit that runs the broker as it.
+The unit is installed but not enabled, since the broker cannot start before its
+key and configuration exist.
+Put them in place, then:
+.Dl systemctl enable --now github-token-broker
+.Pp
+The unit's
+.Ql RuntimeDirectory=
+owns the socket directory, mode
+.Ql 0750 ,
+so a socket mode of
+.Ql 0660
+lets the account's group mint.
+Add each client's account to that group:
+.Dl usermod -aG github-token-broker Ar account
+.Pp
+A process takes on its groups when it starts, so the client's next login or
+restart is the one that can mint.
+A client that is itself a systemd service can instead name the group in its own
+unit, with
+.Ql SupplementaryGroups=github-token-broker ;
+see
+.Xr systemd.exec 5 .
+A client in a container joins through the container runtime; see
+.Xr github-token 1 .
+.Pp
+A refused command line, key, or configuration is not restarted; anything else
+is, after
+.Sy 5 seconds .
 .\" -------------------------------------------------------------------------
 .Sh LOGGING
 Two streams, split by whether the broker went on to serve.
@@ -257,6 +289,25 @@ Concurrent misses for one key are coalesced onto a single mint.
 A failed mint clears its entry, so it fails only the callers already waiting on
 it and never poisons a later request.
 .\" -------------------------------------------------------------------------
+.Sh FILES
+The paths the Debian package and its example configuration use.
+.Bl -tag -width Ds
+.It Pa /etc/github-token-broker/config.json
+The configuration; see
+.Xr github-token-broker-config 5 .
+.It Pa /etc/github-token-broker/app.pem
+The App private key, owned by the service account, mode
+.Ql 0400 .
+.It Pa /run/github-token-broker/broker.sock
+The socket, in the directory the unit's
+.Ql RuntimeDirectory=
+owns.
+.It Pa /usr/lib/systemd/system/github-token-broker.service
+The unit.
+.It Pa /usr/share/github-token-broker/config.example.json
+A configuration to start from.
+.El
+.\" -------------------------------------------------------------------------
 .Sh EXIT STATUS
 Following the conventional
 .In sysexits.h
@@ -423,7 +474,8 @@ Only the log distinguishes the classes sharing a status.
 .\" -------------------------------------------------------------------------
 .Sh SEE ALSO
 .Xr github-token 1 ,
-.Xr github-token-broker-config 5
+.Xr github-token-broker-config 5 ,
+.Xr systemd.exec 5
 .\" -------------------------------------------------------------------------
 .Sh VERSION
 .Nm
