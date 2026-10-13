@@ -1,12 +1,12 @@
 [
   {
-    "image": "ubuntu:24.04@sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60",
+    "image": "ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55",
     "proves": "the glibc floor itself",
     "floor": true,
     "deb": true
   },
   {
-    "image": "debian:trixie@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c",
+    "image": "debian:trixie@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5",
     "proves": "a newer glibc and a Debian userland",
     "deb": true
   },
