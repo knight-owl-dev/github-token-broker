@@ -25,7 +25,7 @@ jobs:
 
   lint:
     runs-on: ubuntu-26.04-arm
-    container: ghcr.io/knight-owl-dev/ci-tools:v1.6.1@sha256:822d75b014b3de9859297439df2d31b3a761a293db5d0b1874cd18c77f03068f
+    container: ghcr.io/knight-owl-dev/ci-tools:v1.8.1@sha256:2f3b4712e19b1d0aadf751739f472aa9dd892154f0cce29203c9ec4a36d0f75d
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The job runs as root on a checkout the runner's account owns, and
