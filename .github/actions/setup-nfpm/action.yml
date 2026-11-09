@@ -12,4 +12,4 @@ runs:
 
     - name: Install nfpm
       shell: bash
-      run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+      run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
