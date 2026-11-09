@@ -46,6 +46,8 @@
 
         <!-- Restore is reproducible: a lock file per project, checked in -->
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+        <!-- A source-built SDK (Homebrew's) offers its own ILCompiler and ILLink, whose hashes are not the lock files' -->
+        <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
     <ItemGroup>

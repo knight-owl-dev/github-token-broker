@@ -102,5 +102,10 @@ bite the same way. `mandoc` reports nothing, so it only shows up in the render.
 Escape the leading word with `\&`. Blank lines are refused too — `.\"` is what
 separates sections in the source.
 
+**The SDK patch picks packages the lock files record** — the implicit
+`ILCompiler` and `ILLink.Tasks`. So `global.json` rolls forward by `patch`:
+under `latestPatch`, setup-dotnet installs the newest patch, and every branch
+behind the SDK bump fails `make lint-dotnet`.
+
 **`TestKeys` hands out two RSA keys per assembly**, since generating them per
 test dominates the run.
