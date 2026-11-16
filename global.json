@@ -1,12 +1,12 @@
 {
   "sdk": {
-    "version": "10.0.403",
+    "version": "10.0.404",
     "rollForward": "patch"
   },
   "test": {
     "runner": "Microsoft.Testing.Platform"
   },
   "knightOwl": {
-    "buildImage": "mcr.microsoft.com/dotnet/sdk:10.0.403-noble-aot@sha256:e5b1f5150f66079aa409eec64042a13de475530864825bf85d575188d3c8d3f9"
+    "buildImage": "mcr.microsoft.com/dotnet/sdk:10.0.404-noble-aot@sha256:7d223c2b945173edb8c73e5f5d48a64e7cd0ca632ccf95170b857e8eea78913c"
   }
 }
